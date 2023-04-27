@@ -17,6 +17,10 @@ When no limit is provided, default of 500 items is used. limit is capped also at
 
 When no start is provided, default of 0 is used.
 
+GET `/v1/delegated_stakes/csv`
+
+Serves most recent list of delegated stakes as a CSV file.
+
 GET `/v1/delegated_stakes/info`
 
 GET `/v1/epoch/info`
