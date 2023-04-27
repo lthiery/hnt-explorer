@@ -60,7 +60,7 @@ impl Memory {
         // Only keep data that is less than 16 minutes old
         let current_time = Utc::now().timestamp();
         for (key, value) in &self.data {
-            if value.timestamp > current_time + 60 * 60 * 15 {
+            if value.timestamp < current_time + 60 * 60 * 15 {
                 data.insert(*key, value.clone());
             }
         }
