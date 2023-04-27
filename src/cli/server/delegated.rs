@@ -187,7 +187,9 @@ pub async fn get_delegated_stakes(
     }
 }
 
-pub async fn serve_latest_as_csv(Extension(memory): Extension<Arc<Mutex<Memory>>>) -> impl IntoResponse {
+pub async fn serve_latest_as_csv(
+    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+) -> impl IntoResponse {
     let memory = memory.lock().await;
     let latest_file = memory.latest_file();
     let mime_type = mime_guess::from_path(&latest_file).first_or_text_plain();
@@ -214,7 +216,10 @@ pub async fn serve_latest_as_csv(Extension(memory): Extension<Arc<Mutex<Memory>>
                         )
                         .header(
                             header::CONTENT_DISPOSITION,
-                            HeaderValue::from_str(&format!("attachment; filename=\"{latest_file}\"")).unwrap(),
+                            HeaderValue::from_str(&format!(
+                                "attachment; filename=\"{latest_file}\""
+                            ))
+                            .unwrap(),
                         )
                         .body(body::boxed(Full::from(contents)))
                         .unwrap()

@@ -44,8 +44,10 @@ impl Server {
         // build our application with a route
         let app = Router::new()
             .route("/v1/delegated_stakes", get(delegated::delegated_stakes))
-            .route("/v1/delegated_stakes/csv", get(delegated::serve_latest_as_csv))
-
+            .route(
+                "/v1/delegated_stakes/csv",
+                get(delegated::serve_latest_as_csv),
+            )
             .route(
                 "/v1/delegated_stakes/info",
                 get(delegated::delegated_stakes_metadata),
