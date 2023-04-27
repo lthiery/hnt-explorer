@@ -2038,7 +2038,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "axum",
- "base64 0.12.3",
+ "base64 0.21.0",
  "chrono",
  "clap 4.2.4",
  "csv",
@@ -2048,6 +2048,7 @@ dependencies = [
  "helium-sub-daos",
  "json",
  "lazy_static",
+ "mime_guess",
  "rand 0.8.5",
  "reqwest",
  "rust_decimal",
@@ -2535,6 +2536,16 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "minimal-lexical"
@@ -5742,6 +5753,15 @@ dependencies = [
  "crunchy",
  "hex",
  "static_assertions",
+]
+
+[[package]]
+name = "unicase"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
+dependencies = [
+ "version_check",
 ]
 
 [[package]]
