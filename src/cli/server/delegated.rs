@@ -64,7 +64,7 @@ impl Memory {
                 data.insert(*key, value.clone());
             }
         }
-        println!("History contains :{} entries", data.len());
+        println!("History contains {} entries", data.len());
         self.data = data;
         self.write_latest_to_csv()?;
         self.remove_csv(previous_file).await?;
