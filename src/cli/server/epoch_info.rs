@@ -35,12 +35,13 @@ pub async fn get_epoch_info(rpc_client: Arc<RpcClient>, memory: Arc<Mutex<Memory
         let day = Utc::now().day();
         if day != last_pull_day {
             last_pull_day = day;
-            time::sleep(time::Duration::from_secs(60 * 2)).await;
-            let latest_data = Memory::pull_latest_data(&rpc_client).await?;
-            {
-                let mut memory = memory.lock().await;
-                memory.update_data(latest_data).await?;
+            let mut latest_data = Memory::pull_latest_data(&rpc_client).await;
+            while latest_data.is_err() {
+                time::sleep(time::Duration::from_secs(60 * 1)).await;
+                latest_data = Memory::pull_latest_data(&rpc_client).await;
             }
+            let mut memory = memory.lock().await;
+            memory.update_data(latest_data.unwrap()).await?;
         }
     }
 }

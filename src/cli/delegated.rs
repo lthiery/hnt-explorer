@@ -446,6 +446,8 @@ pub struct PositionSaved {
     pub sub_dao: SubDao,
     pub last_claimed_epoch: u64,
     pub start_ts: i64,
+    pub end_ts: i64,
+    pub duration_s: i64,
     pub purged: bool,
     pub vehnt: Hnt,
 }
@@ -454,12 +456,14 @@ impl PositionSaved {
     pub fn try_from_full_position_raw(position: &FullPositionRaw, vehnt: u128) -> Result<Self> {
         let delegated_position = DelegatedPosition::try_from(position.delegated_position.clone())?;
         Ok(Self {
-            position_key: position.delegated_position_key.to_string(),
+            position_key: position.position_key.to_string(),
             delegated_position_key: position.delegated_position_key.to_string(),
             hnt_amount: delegated_position.hnt_amount,
             sub_dao: delegated_position.sub_dao,
             last_claimed_epoch: delegated_position.last_claimed_epoch,
             start_ts: delegated_position.start_ts,
+            end_ts: position.position.lockup.end_ts,
+            duration_s: position.position.lockup.end_ts - delegated_position.start_ts,
             purged: delegated_position.purged,
             vehnt: Hnt::from(u64::try_from(vehnt / PRECISION_FACTOR)?),
         })

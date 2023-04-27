@@ -179,10 +179,13 @@ pub async fn get_delegated_stakes(
     loop {
         time::sleep(time::Duration::from_secs(60 * 5)).await;
         println!("Pulling latest data");
-        let latest_data = Memory::pull_latest_data(&rpc_client).await?;
+        let mut latest_data = Memory::pull_latest_data(&rpc_client).await;
+        while latest_data.is_err() {
+            latest_data = Memory::pull_latest_data(&rpc_client).await;
+        }
         {
             let mut memory = memory.lock().await;
-            memory.update_data(latest_data).await?;
+            memory.update_data(latest_data.unwrap()).await?;
         }
     }
 }
