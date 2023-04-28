@@ -17,6 +17,12 @@ When no limit is provided, default of 500 items is used. limit is capped also at
 
 When no start is provided, default of 0 is used.
 
+If using more than one parameter at a time, all parameters must be encapsulated in a string. For example:
+
+```
+https://hnt-explorer.herokuapp.com/v1/delegated_stakes?"timestamp=1682720623?start=500"
+```
+
 GET `/v1/delegated_stakes/csv`
 
 Serves most recent list of delegated stakes as a CSV file.
