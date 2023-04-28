@@ -109,6 +109,16 @@ pub async fn delegated_stakes(
     }?;
 
     let start = query.start.map_or(0, |start| start);
+    if start > data.positions.len() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Start index {start} is greater than the total number of positions {total}",
+                total = data.positions.len()
+            ),
+        ));
+    }
+
     let max_data = data.positions.len() - start;
     let limit = query.limit.map_or(DEFAULT_LIMIT, |limit| {
         limit.min(DEFAULT_LIMIT).min(max_data)
