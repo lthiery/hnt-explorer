@@ -9,7 +9,7 @@ use tokio::{fs::File, io::AsyncReadExt};
 #[derive(Debug)]
 pub struct Memory {
     data: HashMap<i64, Arc<delegated::DelegatedData>>,
-    latest_data: Arc<delegated::DelegatedData>,
+    pub latest_data: Arc<delegated::DelegatedData>,
 }
 
 impl Memory {
@@ -60,7 +60,7 @@ impl Memory {
         // Only keep data that is less than 16 minutes old
         let current_time = Utc::now().timestamp();
         for (key, value) in &self.data {
-            if value.timestamp < current_time + 60 * 60 * 15 {
+            if value.timestamp > current_time - 60 * 16 {
                 data.insert(*key, value.clone());
             }
         }

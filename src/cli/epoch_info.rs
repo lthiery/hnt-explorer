@@ -29,11 +29,13 @@ pub async fn get_epoch_summaries(rpc_client: &RpcClient) -> Result<Vec<EpochSumm
 
     let mut iot_epochs = HashMap::new();
     let mut mobile_epochs = HashMap::new();
+    let mut epochs = Vec::new();
 
     for (_pubkey, account) in &accounts {
         let mut data = account.data.as_slice();
         if let Ok(sub_dao_epoch_info) = SubDaoEpochInfoV0::try_deserialize(&mut data) {
             let sub_dao_epoch_info = SubDaoEpochInfo::try_from(sub_dao_epoch_info)?;
+            epochs.push(sub_dao_epoch_info.clone());
             match sub_dao_epoch_info.sub_dao {
                 SubDao::Iot => {
                     iot_epochs.insert(sub_dao_epoch_info.epoch, sub_dao_epoch_info);
@@ -48,10 +50,14 @@ pub async fn get_epoch_summaries(rpc_client: &RpcClient) -> Result<Vec<EpochSumm
         }
     }
 
+    epochs.sort_by(|a, b| a.epoch.cmp(&b.epoch));
+
     let mut output = Vec::new();
     for (i, iot) in iot_epochs {
         if let Some(mobile) = mobile_epochs.get(&i) {
-            if iot.utility_score.is_some() && mobile.utility_score.is_some() {
+            if iot.initialized && mobile.initialized {
+                // TODO: assert the rewards issued at are close enough
+                // iot.rewards_issued_at == mobile.rewards_issued_at
                 let epoch_summary = {
                     EpochSummary {
                         epoch: i,
@@ -59,18 +65,14 @@ pub async fn get_epoch_summaries(rpc_client: &RpcClient) -> Result<Vec<EpochSumm
                         mobile_dc_burned: mobile.dc_burned,
                         iot_vehnt_at_epoch_start: iot.vehnt_at_epoch_start.try_into()?,
                         mobile_vehnt_at_epoch_start: mobile.vehnt_at_epoch_start.try_into()?,
-                        iot_vehnt_in_closing_positions: iot
-                            .vehnt_in_closing_positions
-                            .try_into()?,
-                        mobile_vehnt_in_closing_positions: mobile
-                            .vehnt_in_closing_positions
-                            .try_into()?,
                         iot_delegation_rewards_issued: iot.delegation_rewards_issued,
                         mobile_delegation_rewards_issued: mobile.delegation_rewards_issued,
-                        iot_utility_score: iot.utility_score.unwrap(),
-                        mobile_utility_score: mobile.utility_score.unwrap(),
-                        iot_rewards_issued_at: iot.rewards_issued_at,
-                        mobile_rewards_issued_at: mobile.rewards_issued_at,
+                        iot_utility_score: iot.utility_score,
+                        mobile_utility_score: mobile.utility_score,
+                        epoch_start_at_ts: iot.rewards_issued_at_ts.map(|t| t - (24 * 60 * 60)),
+                        rewards_issued_at_ts: iot.rewards_issued_at_ts,
+                        rewards_issued_at: iot.rewards_issued_at,
+                        initialized: true,
                     }
                 };
                 output.push(epoch_summary);
@@ -78,7 +80,10 @@ pub async fn get_epoch_summaries(rpc_client: &RpcClient) -> Result<Vec<EpochSumm
         }
     }
     output.sort_by(|a, b| a.epoch.cmp(&b.epoch));
-
+    // the last epoch does not have epoch_start_at, so we will copy it from penultimate epoch
+    let len = output.len();
+    let penultimate = &output[len - 2];
+    output[len - 1].epoch_start_at_ts = penultimate.rewards_issued_at_ts;
     Ok(output)
 }
 
@@ -87,14 +92,21 @@ impl EpochInfo {
         let summaries = get_epoch_summaries(&rpc_client).await?;
         use csv::Writer;
         let mut wtr = Writer::from_path("epochs.csv")?;
-        for record in summaries {
+        for record in &summaries {
+            println!("{:?}", record);
+            wtr.serialize(record)?;
+        }
+
+        for mut record in summaries {
+            record.scale_down();
+            println!("{:?}", record);
             wtr.serialize(record)?;
         }
         Ok(())
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SubDaoEpochInfo {
     pub epoch: u64,
     pub sub_dao: SubDao,
@@ -110,37 +122,61 @@ pub struct SubDaoEpochInfo {
     pub utility_score: Option<u128>,
     /// The program only needs to know whether or not rewards were issued, however having a history of when they were issued could prove
     /// useful in the future, or at least for debugging purposes
+    pub rewards_issued_at_ts: Option<i64>,
     pub rewards_issued_at: Option<DateTime<Utc>>,
     pub bump_seed: u8,
     pub initialized: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EpochSummary {
     pub epoch: u64,
     pub iot_dc_burned: u64,
     pub mobile_dc_burned: u64,
 
     pub iot_vehnt_at_epoch_start: VeHnt,
-    pub iot_vehnt_in_closing_positions: VeHnt,
-
     pub mobile_vehnt_at_epoch_start: VeHnt,
-    pub mobile_vehnt_in_closing_positions: VeHnt,
 
     pub iot_delegation_rewards_issued: u64,
     pub mobile_delegation_rewards_issued: u64,
 
-    pub iot_utility_score: u128,
-    pub mobile_utility_score: u128,
+    pub iot_utility_score: Option<u128>,
+    pub mobile_utility_score: Option<u128>,
 
-    pub iot_rewards_issued_at: Option<DateTime<Utc>>,
-    pub mobile_rewards_issued_at: Option<DateTime<Utc>>,
+    pub epoch_start_at_ts: Option<i64>,
+    pub rewards_issued_at_ts: Option<i64>,
+    pub rewards_issued_at: Option<DateTime<Utc>>,
+
+    pub initialized: bool,
 }
 
 impl EpochSummary {
     pub fn scale_down(&mut self) {
-        self.iot_utility_score /= PRECISION_FACTOR;
-        self.mobile_utility_score /= PRECISION_FACTOR;
+        self.iot_utility_score = self.iot_utility_score.map(|s| s / PRECISION_FACTOR);
+        self.mobile_utility_score = self.mobile_utility_score.map(|s| s / PRECISION_FACTOR);
+    }
+
+    pub fn from_partial_data(
+        epoch: u64,
+        mobile_vehnt: u128,
+        iot_vehnt: u128,
+        epoch_start_at_ts: i64,
+    ) -> Result<Self> {
+        Ok(EpochSummary {
+            epoch,
+            iot_dc_burned: 0,
+            mobile_dc_burned: 0,
+            iot_vehnt_at_epoch_start: VeHnt::try_from(iot_vehnt)?,
+            mobile_vehnt_at_epoch_start: VeHnt::try_from(mobile_vehnt)?,
+            iot_delegation_rewards_issued: 0,
+            mobile_delegation_rewards_issued: 0,
+            iot_utility_score: None,
+            mobile_utility_score: None,
+            epoch_start_at_ts: Some(epoch_start_at_ts),
+            rewards_issued_at_ts: None,
+            rewards_issued_at: None,
+            initialized: false,
+        })
     }
 }
 
@@ -156,6 +192,7 @@ impl TryFrom<SubDaoEpochInfoV0> for SubDaoEpochInfo {
             fall_rates_from_closing_positions: value.fall_rates_from_closing_positions,
             delegation_rewards_issued: value.delegation_rewards_issued,
             utility_score: value.utility_score,
+            rewards_issued_at_ts: value.rewards_issued_at,
             rewards_issued_at: value
                 .rewards_issued_at
                 .map(|t| DateTime::from_utc(NaiveDateTime::from_timestamp_opt(t, 0).unwrap(), Utc)),
@@ -165,7 +202,7 @@ impl TryFrom<SubDaoEpochInfoV0> for SubDaoEpochInfo {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct VeHnt(Decimal);
 
 impl TryFrom<u128> for VeHnt {

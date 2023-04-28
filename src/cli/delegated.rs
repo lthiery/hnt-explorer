@@ -10,7 +10,7 @@ pub struct Delegated {
 }
 
 use helium_sub_daos::{caclulate_vhnt_info, DelegatedPositionV0, PrecisePosition, SubDaoV0};
-use voter_stake_registry::state::{PositionV0, Registrar, PRECISION_FACTOR};
+use voter_stake_registry::state::{LockupKind, PositionV0, Registrar, PRECISION_FACTOR};
 
 const ANOTHER_DIVIDER: u128 = TOKEN_DIVIDER * PRECISION_FACTOR;
 
@@ -70,7 +70,7 @@ pub struct Data {
 #[derive(Default, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Total {
     count: usize,
-    vehnt: u128,
+    pub vehnt: u128,
     hnt: u64,
     lockup: u128,
     fall_rate: u128,
@@ -450,6 +450,16 @@ pub struct PositionSaved {
     pub duration_s: i64,
     pub purged: bool,
     pub vehnt: Hnt,
+    pub lockup_type: LockupType,
+}
+
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LockupType {
+    Cliff,
+    Constant,
+    #[default]
+    Unlocked,
 }
 
 impl PositionSaved {
@@ -466,6 +476,11 @@ impl PositionSaved {
             duration_s: position.position.lockup.end_ts - delegated_position.start_ts,
             purged: delegated_position.purged,
             vehnt: Hnt::from(u64::try_from(vehnt / PRECISION_FACTOR)?),
+            lockup_type: match position.position.lockup.kind {
+                LockupKind::Constant => LockupType::Constant,
+                LockupKind::Cliff => LockupType::Cliff,
+                LockupKind::None => LockupType::Unlocked,
+            },
         })
     }
 }
