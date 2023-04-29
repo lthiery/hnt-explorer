@@ -9,7 +9,7 @@ use tokio::{fs::File, io::AsyncReadExt};
 #[derive(Debug)]
 pub struct Memory {
     data: HashMap<i64, Arc<delegated::DelegatedData>>,
-    latest_data: Arc<delegated::DelegatedData>,
+    pub latest_data: Arc<delegated::DelegatedData>,
 }
 
 impl Memory {
@@ -60,7 +60,7 @@ impl Memory {
         // Only keep data that is less than 16 minutes old
         let current_time = Utc::now().timestamp();
         for (key, value) in &self.data {
-            if value.timestamp < current_time + 60 * 60 * 15 {
+            if value.timestamp > current_time - 60 * 16 {
                 data.insert(*key, value.clone());
             }
         }
@@ -109,6 +109,16 @@ pub async fn delegated_stakes(
     }?;
 
     let start = query.start.map_or(0, |start| start);
+    if start > data.positions.len() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Start index {start} is greater than the total number of positions {total}",
+                total = data.positions.len()
+            ),
+        ));
+    }
+
     let max_data = data.positions.len() - start;
     let limit = query.limit.map_or(DEFAULT_LIMIT, |limit| {
         limit.min(DEFAULT_LIMIT).min(max_data)
