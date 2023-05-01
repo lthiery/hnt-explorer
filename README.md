@@ -2,16 +2,31 @@
 
 # hnt-explorer
 
-This application extracts data from helium-programs via Solana RPC and serves it via HTTP. There are CLI commands
-meant to run and test the data extraction logic.
+This application extracts data from helium-programs via Solana RPC and serves it via HTTP. There are CLI commands meant
+to run and test the data extraction logic.
+
+## Building and running
+
+You only need to do this if you want to run the server locally and/or make changes. Otherwise, skip to the next section.
+
+`cargo run -- server` starts the server. By default, it will hit the public Solana RPC **so this will probably error**. 
+Use the environmental variable `SOL_RPC_ENDPOINT` to set a different RPC endpoint (checkout [Helius](https://www.helius.xyz/)
+for example).
+
+## Public endpoint
+
+I am currently hosting a public endpoint here: https://hnt-explorer.herokuapp.com. 
+Prepend the paths below with the endpoint.
 
 ## Endpoints 
 
-GET `/v1/delegated_stakes`
+GET [`/v1/delegated_stakes`](https://hnt-explorer.herokuapp.com/v1/delegated_stakes)
+
 Params: `limit`, `start`, `timestamp`
 
 Provides list of delegated stakes. When no timestamp is provided, the latest pulled data is used, including timestamp.
-Use the timestamp to maintain index on the same batch of data and start and limit to fetch more positions.
+Data is pulled every 5 minutes. Use the timestamp to maintain index on the same batch of data and start and limit to
+fetch more positions.
 
 When no limit is provided, default of 500 items is used. limit is capped also at 500.
 
@@ -23,32 +38,35 @@ If using more than one parameter at a time, all parameters must be encapsulated 
 https://hnt-explorer.herokuapp.com/v1/delegated_stakes?"timestamp=1682720623?start=500"
 ```
 
-GET `/v1/delegated_stakes/csv`
+GET [`/v1/delegated_stakes/csv`](https://hnt-explorer.herokuapp.com/v1/delegated_stakes/csv)
 
 Serves most recent list of delegated stakes as a CSV file.
 
-GET `/v1/delegated_stakes/info`
+GET [`/v1/delegated_stakes/info`](https://hnt-explorer.herokuapp.com/v1/delegated_stakes/info)
 
-GET `/v1/epoch/info`
+GET [`/v1/epoch/info`](https://hnt-explorer.herokuapp.com/v1/epoch/info)
 
 ## Environmental variables
 
 * `SOL_RPC_ENDPOINT` - Solana RPC URL (defaults to `https://api.mainnet-beta.solana.com`)
 * `PORT` - Port to listen on (defaults to `3000`)
 
-## Pushing to heroku 
+## Pushing to heroku
+
+You can host this program on Heroku easily by creating an app and pushing the container to it. Just change the app name
+below from `hnt-explorer` to whatever your app name is.
 
 Build the container:
 ```
-heroku container:push web 
+heroku container:push web -a hnt-explorer
 ```
 
 Release it:
 ```
-heroku container:release web 
+heroku container:release web -a hnt-explorer 
 ```
 
 Check logs:
 ```
-heroku logs --tail 
+heroku logs --tail -a hnt-explorer
 ```
