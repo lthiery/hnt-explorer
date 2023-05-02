@@ -1,16 +1,20 @@
 use super::*;
 use solana_sdk::pubkey::Pubkey;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, clap::Args)]
 /// Fetches all delegated positions and total HNT, veHNT, and subDAO delegations.
-pub struct Delegated {
+pub struct Positions {
     #[arg(short, long)]
     verify: bool,
 }
 
-use helium_sub_daos::{caclulate_vhnt_info, DelegatedPositionV0, PrecisePosition, SubDaoV0};
-use voter_stake_registry::state::{LockupKind, PositionV0, Registrar, PRECISION_FACTOR};
+use helium_sub_daos::{
+    caclulate_vhnt_info, DelegatedPositionV0, PrecisePosition, SubDaoV0, VehntInfo as VehntInfoRaw,
+};
+use voter_stake_registry::state::{
+    LockupKind, PositionV0, Registrar, VotingMintConfigV0, PRECISION_FACTOR,
+};
 
 const ANOTHER_DIVIDER: u128 = TOKEN_DIVIDER * PRECISION_FACTOR;
 
@@ -51,10 +55,26 @@ async fn get_accounts_with_prefix(
     Ok(accounts)
 }
 
+/// This function will work until there's too many to fetch in a single call
+pub async fn get_all_positions(
+    rpc_client: &RpcClient,
+) -> Result<Vec<(Pubkey, solana_sdk::account::Account)>> {
+    const POSITION_V0_DESCRIMINATAOR: [u8; 8] = [152, 131, 154, 46, 158, 42, 31, 233];
+    let helium_vsr_id = Pubkey::from_str(HELIUM_VSR_ID)?;
+    let mut config = RpcProgramAccountsConfig::default();
+    let memcmp = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &POSITION_V0_DESCRIMINATAOR));
+    config.filters = Some(vec![RpcFilterType::DataSize(180), memcmp]);
+    config.account_config.encoding = Some(UiAccountEncoding::Base64);
+    let accounts = rpc_client
+        .get_program_accounts_with_config(&helium_vsr_id, config)
+        .await?;
+    Ok(accounts)
+}
+
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DelegatedData {
     pub timestamp: i64,
-    pub positions: Vec<PositionSaved>,
+    pub positions: Vec<Position>,
     pub positions_total_len: usize,
     pub network: Data,
     pub mobile: Data,
@@ -146,6 +166,50 @@ impl DelegatedData {
 
 pub async fn get_data(rpc_client: &RpcClient) -> Result<DelegatedData> {
     let mut d = DelegatedData::new();
+    let vsr_accounts = get_all_positions(rpc_client).await?;
+
+    let raw_positions = vsr_accounts
+        .iter()
+        .map(|(pubkey, account)| {
+            let mut data = account.data.as_slice();
+            (*pubkey, PositionV0::try_deserialize(&mut data).unwrap())
+        })
+        .collect::<Vec<(Pubkey, PositionV0)>>();
+
+    println!("Total positions: {}", raw_positions.len());
+
+    let registrar_keys: Vec<Pubkey> = raw_positions
+        .iter()
+        .map(|(_, p)| p.registrar)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    let registrars_raw = rpc_client.get_multiple_accounts(&registrar_keys).await?;
+    let registrars_raw: Vec<Registrar> = registrars_raw
+        .iter()
+        .map(|registrar| {
+            let mut data = registrar.as_ref().unwrap().data.as_slice();
+            Registrar::try_deserialize(&mut data)
+        })
+        .map(|result| result.unwrap())
+        .collect();
+
+    let mut registrars = HashMap::new();
+    for registrar in registrars_raw.iter() {
+        let mint = &registrar.voting_mints[0];
+        registrars.insert(mint.mint, mint.clone());
+    }
+
+    let voting_mint_config =
+        &registrars[&Pubkey::from_str("hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux")?];
+    let mut positions = HashMap::new();
+    for (pubkey, position) in raw_positions {
+        let position =
+            Position::try_from_positionv0(pubkey, position, d.timestamp, voting_mint_config)?;
+        positions.insert(pubkey, position);
+    }
+
     let accounts = get_stake_accounts(rpc_client).await?;
     let delegated_positions = accounts
         .iter()
@@ -156,95 +220,53 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<DelegatedData> {
         .filter(|result| result.is_ok())
         .collect::<AnchorResult<Vec<_>>>()?;
 
-    let position_keys = delegated_positions
-        .iter()
-        .map(|(_pubkey, delegated_position)| delegated_position.position)
-        .collect::<Vec<Pubkey>>();
-
-    let mut positions_raw = Vec::new();
-    const BATCH_SIZE: usize = 100;
-    for chunk in position_keys.chunks(BATCH_SIZE) {
-        let chunk_positions_raw = rpc_client.get_multiple_accounts(chunk).await?;
-        positions_raw.extend(chunk_positions_raw);
+    for (pubkey, delegated_position) in delegated_positions {
+        let delegated_position = delegated_position;
+        let mut position = positions.get_mut(&delegated_position.position).unwrap();
+        position.delegated = Some(DelegatedPosition::try_from_delegated_position_v0(
+            *pubkey,
+            delegated_position,
+        )?);
     }
 
-    let positions_with_delegations: Vec<FullPositionRaw> = delegated_positions
-        .iter()
-        .zip(positions_raw)
-        .map(|((pubkey, delegated_position), position)| {
-            let position_unwrapped = position.unwrap();
-            let mut data = position_unwrapped.data.as_slice();
-            let position_parsed = PositionV0::try_deserialize(&mut data).unwrap();
-            FullPositionRaw {
-                position_key: delegated_position.position,
-                delegated_position_key: **pubkey,
-                position: position_parsed,
-                delegated_position: delegated_position.clone(),
-            }
-        })
-        .collect();
-
-    let registrar_keys: Vec<Pubkey> = positions_with_delegations
-        .iter()
-        .map(|p| p.position.registrar)
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    let registrars_raw = rpc_client.get_multiple_accounts(&registrar_keys).await?;
-    let registrars: Vec<Registrar> = registrars_raw
-        .iter()
-        .map(|registrar| {
-            let mut data = registrar.as_ref().unwrap().data.as_slice();
-            Registrar::try_deserialize(&mut data)
-        })
-        .map(|result| result.unwrap())
-        .collect();
-
-    let voting_mint_config = registrars[0].voting_mints[0].clone();
     let mut hnt_amounts = vec![];
     let mut vehnt_amounts = vec![];
     let mut lockups = vec![];
-    for position in positions_with_delegations {
-        let vehnt_info = caclulate_vhnt_info(d.timestamp, &position.position, &voting_mint_config)?;
-        let vehnt = position
-            .position
-            .voting_power_precise(&voting_mint_config, d.timestamp)?;
-        let duration =
-            (position.position.lockup.end_ts - position.position.lockup.start_ts) as u128;
-        d.network.total.hnt += position.delegated_position.hnt_amount;
-        d.network.total.fall_rate += vehnt_info.pre_genesis_end_fall_rate;
-        d.network.total.vehnt += vehnt;
+    for (_, position) in positions {
+        let duration = (position.end_ts - position.start_ts) as u128;
+        d.network.total.hnt += position.hnt_amount;
+        d.network.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+        d.network.total.vehnt += position.vehnt;
         d.network.total.count += 1;
         d.network.total.lockup += duration;
 
-        let saved_position = PositionSaved::try_from_full_position_raw(&position, vehnt)?;
-        hnt_amounts.push((
-            position.delegated_position.hnt_amount,
-            saved_position.sub_dao,
-        ));
-        vehnt_amounts.push((vehnt, saved_position.sub_dao));
-        lockups.push((duration, saved_position.sub_dao));
-        d.positions.push(saved_position);
-        match SubDao::try_from(position.delegated_position.sub_dao).unwrap() {
-            SubDao::Mobile => {
-                d.mobile.total.hnt += position.delegated_position.hnt_amount;
-                d.mobile.total.fall_rate += vehnt_info.pre_genesis_end_fall_rate;
-                d.mobile.total.vehnt += vehnt;
-                d.mobile.total.count += 1;
-                d.mobile.total.lockup += duration;
-            }
-            SubDao::Iot => {
-                d.iot.total.hnt += position.delegated_position.hnt_amount;
-                d.iot.total.fall_rate += vehnt_info.pre_genesis_end_fall_rate;
-                d.iot.total.vehnt += vehnt;
-                d.iot.total.count += 1;
-                d.iot.total.lockup += duration;
-            }
-            SubDao::Unknown => {
-                return Err(Error::Custom("Unknown subdao"));
+        if let Some(delegated) = &position.delegated {
+            hnt_amounts.push((position.hnt_amount, delegated.sub_dao));
+            vehnt_amounts.push((position.vehnt, delegated.sub_dao));
+            lockups.push((duration, delegated.sub_dao));
+            match delegated.sub_dao {
+                SubDao::Mobile => {
+                    d.mobile.total.hnt += position.hnt_amount;
+                    d.mobile.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+                    d.mobile.total.vehnt += position.vehnt;
+                    d.mobile.total.count += 1;
+                    d.mobile.total.lockup += duration;
+                }
+                SubDao::Iot => {
+                    d.iot.total.hnt += position.hnt_amount;
+                    d.iot.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+                    d.iot.total.vehnt += position.vehnt;
+                    d.iot.total.count += 1;
+                    d.iot.total.lockup += duration;
+                }
+                SubDao::Unknown => {
+                    return Err(Error::Custom("Unknown subdao"));
+                }
             }
         }
+        let mut position_copy = position.clone();
+        position_copy.vehnt /= PRECISION_FACTOR;
+        d.positions.push(position_copy);
     }
     d.positions_total_len = d.positions.len();
 
@@ -301,7 +323,7 @@ fn get_stats(
     stats
 }
 
-impl Delegated {
+impl Positions {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
         let d = get_data(&rpc_client).await?;
         if self.verify {
@@ -353,24 +375,34 @@ impl Delegated {
                     - i128::try_from(d.iot.total.fall_rate).unwrap()
             );
         } else {
+            let delegated_hnt = d.mobile.total.vehnt + d.iot.total.vehnt;
+            let undelegated_hnt = d.network.total.vehnt - delegated_hnt;
             println!(
-                "Total MOBILE veHNT : {} ({}%)",
+                "Total MOBILE veHNT     :   {} ({}% of delegated)",
                 format_vehnt(d.mobile.total.vehnt),
-                percentage(d.mobile.total.vehnt, d.network.total.vehnt)
+                percentage(d.mobile.total.vehnt, delegated_hnt)
             );
             println!(
-                "Total IOT veHNT    : {} ({}%)",
+                "Total IOT veHNT        : {} ({}% of delegated)",
                 format_vehnt(d.iot.total.vehnt),
-                percentage(d.iot.total.vehnt, d.network.total.vehnt)
+                percentage(d.iot.total.vehnt, delegated_hnt)
             );
             println!(
-                "Total veHNT        : {}",
+                "Total undelegated veHNT: {} ({}% of total)",
+                format_vehnt(undelegated_hnt),
+                percentage(undelegated_hnt, d.network.total.vehnt)
+            );
+            println!(
+                "Total veHNT            : {}",
                 format_vehnt(d.network.total.vehnt)
             );
         }
-        println!("Total positions    :        {}", d.positions_total_len);
+        println!("Total positions        :         {}", d.positions_total_len);
 
-        println!("Total HNT delegated:   {}", format_hnt(d.network.total.hnt));
+        println!(
+            "Total HNT locked       :    {}",
+            format_hnt(d.network.total.hnt)
+        );
         println!(
             "Average multiple   :         {}",
             (d.network.total.vehnt / ANOTHER_DIVIDER) as u64
@@ -426,32 +458,53 @@ fn format_hnt(vehnt: u64) -> String {
 
 use helium_api::models::Hnt;
 
-#[derive(Debug)]
-pub struct DelegatedPosition {
-    pub mint: Pubkey,
-    pub position: Pubkey,
-    pub hnt_amount: Hnt,
-    pub sub_dao: SubDao,
-    pub last_claimed_epoch: u64,
-    pub start_ts: i64,
-    pub purged: bool,
-}
-
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
-/// Saves some high level info about the position
-pub struct PositionSaved {
+pub struct Position {
     pub position_key: String,
-    pub delegated_position_key: String,
-    pub hnt_amount: Hnt,
-    pub sub_dao: SubDao,
-    pub last_claimed_epoch: u64,
+    pub hnt_amount: u64,
     pub start_ts: i64,
     pub genesis_end_ts: i64,
     pub end_ts: i64,
     pub duration_s: i64,
-    pub purged: bool,
+    pub vehnt: u128,
+    pub vehnt_info: VehntInfo,
+    pub lockup_type: LockupType,
+    pub delegated: Option<DelegatedPosition>,
+}
+
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PositionLegacy {
+    pub position_key: String,
+    pub hnt_amount: Hnt,
+    pub start_ts: i64,
+    pub genesis_end_ts: i64,
+    pub end_ts: i64,
+    pub duration_s: i64,
     pub vehnt: Hnt,
     pub lockup_type: LockupType,
+    pub purged: bool,
+    #[serde(flatten)]
+    pub delegated: Option<DelegatedPosition>,
+}
+
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DelegatedPosition {
+    pub delegated_position_key: String,
+    pub sub_dao: SubDao,
+    pub last_claimed_epoch: u64,
+}
+
+impl DelegatedPosition {
+    fn try_from_delegated_position_v0(
+        delegated_position_key: Pubkey,
+        delegated_position: DelegatedPositionV0,
+    ) -> Result<Self> {
+        Ok(Self {
+            delegated_position_key: delegated_position_key.to_string(),
+            sub_dao: SubDao::try_from(delegated_position.sub_dao)?,
+            last_claimed_epoch: delegated_position.last_claimed_epoch,
+        })
+    }
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
@@ -463,22 +516,27 @@ pub enum LockupType {
     Unlocked,
 }
 
-impl PositionSaved {
-    pub fn try_from_full_position_raw(position: &FullPositionRaw, vehnt: u128) -> Result<Self> {
-        let delegated_position = DelegatedPosition::try_from(position.delegated_position.clone())?;
+impl Position {
+    pub fn try_from_positionv0(
+        position_key: Pubkey,
+        position: PositionV0,
+        timestamp: i64,
+        voting_mint_config: &VotingMintConfigV0,
+    ) -> Result<Self> {
+        let vehnt_info = caclulate_vhnt_info(timestamp, &position, voting_mint_config)?;
+        let vehnt = position.voting_power_precise(voting_mint_config, timestamp)?;
+
         Ok(Self {
-            position_key: position.position_key.to_string(),
-            delegated_position_key: position.delegated_position_key.to_string(),
-            hnt_amount: delegated_position.hnt_amount,
-            sub_dao: delegated_position.sub_dao,
-            last_claimed_epoch: delegated_position.last_claimed_epoch,
-            start_ts: delegated_position.start_ts,
-            end_ts: position.position.lockup.end_ts,
-            genesis_end_ts: position.position.genesis_end,
-            duration_s: position.position.lockup.end_ts - delegated_position.start_ts,
-            purged: delegated_position.purged,
-            vehnt: Hnt::from(u64::try_from(vehnt / PRECISION_FACTOR)?),
-            lockup_type: match position.position.lockup.kind {
+            position_key: position_key.to_string(),
+            hnt_amount: position.amount_deposited_native,
+            start_ts: position.lockup.start_ts,
+            end_ts: position.lockup.end_ts,
+            genesis_end_ts: position.genesis_end,
+            duration_s: position.lockup.end_ts - position.lockup.start_ts,
+            vehnt,
+            vehnt_info: vehnt_info.into(),
+            delegated: None,
+            lockup_type: match position.lockup.kind {
                 LockupKind::Constant => LockupType::Constant,
                 LockupKind::Cliff => LockupType::Cliff,
                 LockupKind::None => LockupType::Unlocked,
@@ -487,24 +545,58 @@ impl PositionSaved {
     }
 }
 
-impl TryFrom<DelegatedPositionV0> for DelegatedPosition {
-    type Error = Error;
-    fn try_from(position: DelegatedPositionV0) -> Result<Self> {
-        Ok(Self {
-            mint: position.mint,
-            position: position.position,
-            hnt_amount: Hnt::from(position.hnt_amount),
-            sub_dao: SubDao::try_from(position.sub_dao)?,
-            last_claimed_epoch: position.last_claimed_epoch,
-            start_ts: position.start_ts,
-            purged: position.purged,
-        })
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VehntInfo {
+    pub has_genesis: bool,
+    pub vehnt_at_curr_ts: u128,
+    pub pre_genesis_end_fall_rate: u128,
+    pub post_genesis_end_fall_rate: u128,
+    pub genesis_end_vehnt_correction: u128,
+    pub genesis_end_fall_rate_correction: u128,
+    pub end_vehnt_correction: u128,
+    pub end_fall_rate_correction: u128,
+}
+
+impl From<VehntInfoRaw> for VehntInfo {
+    fn from(value: VehntInfoRaw) -> Self {
+        Self {
+            has_genesis: value.has_genesis,
+            vehnt_at_curr_ts: value.vehnt_at_curr_ts,
+            pre_genesis_end_fall_rate: value.pre_genesis_end_fall_rate,
+            post_genesis_end_fall_rate: value.post_genesis_end_fall_rate,
+            genesis_end_vehnt_correction: value.genesis_end_vehnt_correction,
+            genesis_end_fall_rate_correction: value.genesis_end_fall_rate_correction,
+            end_vehnt_correction: value.end_vehnt_correction,
+            end_fall_rate_correction: value.end_fall_rate_correction,
+        }
     }
 }
 
-pub struct FullPositionRaw {
-    pub position_key: Pubkey,
-    pub delegated_position_key: Pubkey,
-    pub position: PositionV0,
-    pub delegated_position: DelegatedPositionV0,
+#[derive(Debug, Clone, Default)]
+pub struct VotingMintConfig {
+    /// Mint for this entry.
+    pub mint: Pubkey,
+    /// Vote weight factor for all funds in the account, no matter if locked or not.
+    ///
+    /// In 1/SCALED_FACTOR_BASE units.
+    pub baseline_vote_weight_scaled_factor: u64,
+    /// Maximum extra vote weight factor for lockups.
+    ///
+    /// This is the extra votes gained for lockups lasting lockup_saturation_secs or
+    /// longer. Shorter lockups receive only a fraction of the maximum extra vote weight,
+    /// based on lockup_time divided by lockup_saturation_secs.
+    ///
+    /// In 1/SCALED_FACTOR_BASE units.
+    pub max_extra_lockup_vote_weight_scaled_factor: u64,
+    /// Genesis vote power multipliers for lockups.
+    ///
+    /// This is a multiplier applied to voting power for lockups created before
+    /// genesis_extra_lockup_expiration
+    pub genesis_vote_power_multiplier: u8,
+    /// Timestamp of when to stop applying the genesis_extra_lockup_vote_weight_scaled_factor
+    pub genesis_vote_power_multiplier_expiration_ts: i64,
+    /// Number of seconds of lockup needed to reach the maximum lockup bonus.
+    pub lockup_saturation_secs: u64,
+    /// Number of digits to shift native amounts, applying a 10^digit_shift factor.
+    pub digit_shift: i8,
 }

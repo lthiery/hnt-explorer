@@ -1,4 +1,4 @@
-use super::super::delegated;
+use super::super::positions;
 use super::*;
 use axum::{
     body::{self, Empty, Full},
@@ -8,8 +8,8 @@ use axum::{
 use tokio::{fs::File, io::AsyncReadExt};
 #[derive(Debug)]
 pub struct Memory {
-    data: HashMap<i64, Arc<delegated::DelegatedData>>,
-    pub latest_data: Arc<delegated::DelegatedData>,
+    data: HashMap<i64, Arc<positions::DelegatedData>>,
+    pub latest_data: Arc<positions::DelegatedData>,
 }
 
 impl Memory {
@@ -40,13 +40,13 @@ impl Memory {
         Ok(())
     }
 
-    async fn pull_latest_data(rpc_client: &Arc<RpcClient>) -> Result<delegated::DelegatedData> {
-        let mut latest_data = delegated::get_data(rpc_client).await?;
+    async fn pull_latest_data(rpc_client: &Arc<RpcClient>) -> Result<positions::DelegatedData> {
+        let mut latest_data = positions::get_data(rpc_client).await?;
         latest_data.scale_down();
         Ok(latest_data)
     }
 
-    async fn update_data(&mut self, latest_data: delegated::DelegatedData) -> Result {
+    async fn update_data(&mut self, latest_data: positions::DelegatedData) -> Result {
         print!("Updating data...");
         use chrono::Utc;
         let previous_file = self.latest_file();
@@ -82,7 +82,7 @@ pub struct QueryParams {
 #[derive(Default, Debug, serde::Serialize)]
 pub struct DelegatedData {
     pub timestamp: i64,
-    pub positions: Vec<delegated::PositionSaved>,
+    pub positions: Vec<positions::Position>,
     pub positions_total_len: usize,
 }
 
@@ -125,7 +125,7 @@ pub async fn delegated_stakes(
     });
 
     let mut positions = Vec::with_capacity(limit);
-    positions.resize(limit, delegated::PositionSaved::default());
+    positions.resize(limit, positions::Position::default());
     positions.clone_from_slice(&data.positions[start..start + limit]);
 
     let data = DelegatedData {
@@ -177,9 +177,9 @@ pub async fn delegated_stakes_metadata(
 #[derive(Default, Debug, serde::Serialize)]
 pub struct Metadata {
     pub timestamp: i64,
-    pub network: delegated::Data,
-    pub mobile: delegated::Data,
-    pub iot: delegated::Data,
+    pub network: positions::Data,
+    pub mobile: positions::Data,
+    pub iot: positions::Data,
 }
 
 pub async fn get_delegated_stakes(
