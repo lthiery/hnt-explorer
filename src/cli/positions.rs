@@ -72,11 +72,14 @@ pub async fn get_all_positions(
 }
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DelegatedData {
+pub struct PositionData {
     pub timestamp: i64,
     pub positions: Vec<Position>,
+    #[serde(skip_serializing)]
+    pub delegated_positions: Vec<PositionLegacy>,
     pub positions_total_len: usize,
     pub network: Data,
+    pub undelegated: Data,
     pub mobile: Data,
     pub iot: Data,
 }
@@ -148,7 +151,7 @@ impl Data {
     }
 }
 
-impl DelegatedData {
+impl PositionData {
     fn new() -> Self {
         let curr_ts = Utc::now().timestamp();
         Self {
@@ -161,11 +164,12 @@ impl DelegatedData {
         self.network.scale_down();
         self.iot.scale_down();
         self.mobile.scale_down();
+        self.undelegated.scale_down();
     }
 }
 
-pub async fn get_data(rpc_client: &RpcClient) -> Result<DelegatedData> {
-    let mut d = DelegatedData::new();
+pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
+    let mut d = PositionData::new();
     let vsr_accounts = get_all_positions(rpc_client).await?;
 
     let raw_positions = vsr_accounts
@@ -175,8 +179,6 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<DelegatedData> {
             (*pubkey, PositionV0::try_deserialize(&mut data).unwrap())
         })
         .collect::<Vec<(Pubkey, PositionV0)>>();
-
-    println!("Total positions: {}", raw_positions.len());
 
     let registrar_keys: Vec<Pubkey> = raw_positions
         .iter()
@@ -227,6 +229,8 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<DelegatedData> {
             *pubkey,
             delegated_position,
         )?);
+        d.delegated_positions
+            .push(PositionLegacy::from(position.clone()));
     }
 
     let mut hnt_amounts = vec![];
@@ -263,6 +267,12 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<DelegatedData> {
                     return Err(Error::Custom("Unknown subdao"));
                 }
             }
+        } else {
+            d.undelegated.total.hnt += position.hnt_amount;
+            d.undelegated.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+            d.undelegated.total.vehnt += position.vehnt;
+            d.undelegated.total.count += 1;
+            d.undelegated.total.lockup += duration;
         }
         let mut position_copy = position.clone();
         position_copy.vehnt /= PRECISION_FACTOR;
@@ -467,6 +477,7 @@ pub struct Position {
     pub end_ts: i64,
     pub duration_s: i64,
     pub vehnt: u128,
+    #[serde(skip_serializing)]
     pub vehnt_info: VehntInfo,
     pub lockup_type: LockupType,
     pub delegated: Option<DelegatedPosition>,
@@ -475,16 +486,37 @@ pub struct Position {
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PositionLegacy {
     pub position_key: String,
+    pub delegated_position_key: String,
     pub hnt_amount: Hnt,
+    pub sub_dao: SubDao,
+    pub last_claimed_epoch: u64,
     pub start_ts: i64,
     pub genesis_end_ts: i64,
     pub end_ts: i64,
     pub duration_s: i64,
-    pub vehnt: Hnt,
-    pub lockup_type: LockupType,
     pub purged: bool,
-    #[serde(flatten)]
-    pub delegated: Option<DelegatedPosition>,
+    pub vehnt: u128,
+    pub lockup_type: LockupType,
+}
+
+impl From<Position> for PositionLegacy {
+    fn from(value: Position) -> Self {
+        let delegated = value.delegated.unwrap();
+        Self {
+            position_key: value.position_key,
+            delegated_position_key: delegated.delegated_position_key,
+            last_claimed_epoch: delegated.last_claimed_epoch,
+            sub_dao: delegated.sub_dao,
+            hnt_amount: Hnt::from(value.hnt_amount),
+            start_ts: value.start_ts,
+            genesis_end_ts: value.genesis_end_ts,
+            end_ts: value.end_ts,
+            duration_s: value.duration_s,
+            vehnt: value.vehnt / PRECISION_FACTOR,
+            lockup_type: value.lockup_type,
+            purged: false,
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
@@ -574,29 +606,11 @@ impl From<VehntInfoRaw> for VehntInfo {
 
 #[derive(Debug, Clone, Default)]
 pub struct VotingMintConfig {
-    /// Mint for this entry.
     pub mint: Pubkey,
-    /// Vote weight factor for all funds in the account, no matter if locked or not.
-    ///
-    /// In 1/SCALED_FACTOR_BASE units.
     pub baseline_vote_weight_scaled_factor: u64,
-    /// Maximum extra vote weight factor for lockups.
-    ///
-    /// This is the extra votes gained for lockups lasting lockup_saturation_secs or
-    /// longer. Shorter lockups receive only a fraction of the maximum extra vote weight,
-    /// based on lockup_time divided by lockup_saturation_secs.
-    ///
-    /// In 1/SCALED_FACTOR_BASE units.
     pub max_extra_lockup_vote_weight_scaled_factor: u64,
-    /// Genesis vote power multipliers for lockups.
-    ///
-    /// This is a multiplier applied to voting power for lockups created before
-    /// genesis_extra_lockup_expiration
     pub genesis_vote_power_multiplier: u8,
-    /// Timestamp of when to stop applying the genesis_extra_lockup_vote_weight_scaled_factor
     pub genesis_vote_power_multiplier_expiration_ts: i64,
-    /// Number of seconds of lockup needed to reach the maximum lockup bonus.
     pub lockup_saturation_secs: u64,
-    /// Number of digits to shift native amounts, applying a 10^digit_shift factor.
     pub digit_shift: i8,
 }
