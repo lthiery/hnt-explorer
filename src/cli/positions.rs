@@ -235,6 +235,7 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
 
     let mut hnt_amounts = vec![];
     let mut vehnt_amounts = vec![];
+
     let mut lockups = vec![];
     for (_, position) in positions {
         let duration = (position.end_ts - position.start_ts) as u128;
@@ -268,6 +269,9 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
                 }
             }
         } else {
+            hnt_amounts.push((position.hnt_amount, SubDao::Unknown));
+            vehnt_amounts.push((position.vehnt, SubDao::Unknown));
+            lockups.push((duration, SubDao::Unknown));
             d.undelegated.total.hnt += position.hnt_amount;
             d.undelegated.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
             d.undelegated.total.vehnt += position.vehnt;
@@ -301,7 +305,13 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
         hnt_amounts.clone(),
         lockups.clone(),
     );
-
+    d.undelegated.stats = get_stats(
+        Some(SubDao::Unknown),
+        d.undelegated.total,
+        vehnt_amounts.clone(),
+        hnt_amounts.clone(),
+        lockups.clone(),
+    );
     Ok(d)
 }
 
