@@ -47,7 +47,7 @@ pub async fn get_epoch_info(rpc_client: Arc<RpcClient>, memory: Arc<Mutex<Memory
 
 pub async fn get(
     Extension(memory): Extension<Arc<Mutex<Memory>>>,
-    Extension(stakes_memory): Extension<Arc<Mutex<delegated::Memory>>>,
+    Extension(stakes_memory): Extension<Arc<Mutex<positions::Memory>>>,
 ) -> HandlerResult {
     let (mobile_vehnt, iot_vehnt, ts) = {
         let stakes_memory = stakes_memory.lock().await;

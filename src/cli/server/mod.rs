@@ -15,8 +15,8 @@ use tokio::time;
 pub type Result<T = ()> = std::result::Result<T, Error>;
 pub type HandlerResult = std::result::Result<response::Json<Value>, (StatusCode, String)>;
 
-mod delegated;
 mod epoch_info;
+mod positions;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -35,7 +35,7 @@ impl Server {
         let epoch_info_memory = epoch_info::Memory::new(&rpc_client).await?;
         let epoch_info_memory = Arc::new(Mutex::new(epoch_info_memory));
         println!("epoch_info data intialized...");
-        let delegated_memory = delegated::Memory::new(&rpc_client).await?;
+        let delegated_memory = positions::Memory::new(&rpc_client).await?;
         let delegated_memory = Arc::new(Mutex::new(delegated_memory));
         println!("delegated_memory data initialized!");
 
@@ -43,14 +43,20 @@ impl Server {
 
         // build our application with a route
         let app = Router::new()
-            .route("/v1/delegated_stakes", get(delegated::delegated_stakes))
+            .route("/v1/delegated_stakes", get(positions::delegated_stakes))
             .route(
                 "/v1/delegated_stakes/csv",
-                get(delegated::serve_latest_as_csv),
+                get(positions::server_latest_delegated_positions_as_csv),
             )
             .route(
                 "/v1/delegated_stakes/info",
-                get(delegated::delegated_stakes_metadata),
+                get(positions::positions_metadata),
+            )
+            .route("/v1/positions", get(positions::positions))
+            .route("/v1/positions/info", get(positions::positions_metadata))
+            .route(
+                "/v1/positions/csv",
+                get(positions::server_latest_positions_as_csv),
             )
             .route("/v1/epoch/info", get(epoch_info::get))
             .layer(Extension(delegated_memory.clone()))
@@ -62,7 +68,7 @@ impl Server {
 
         // run it with hyper on localhost:3000
         tokio::select!(
-            result = delegated::get_delegated_stakes(rpc_client.clone(), delegated_memory) => result,
+            result = positions::get_positions(rpc_client.clone(), delegated_memory) => result,
             result = epoch_info::get_epoch_info(rpc_client, epoch_info_memory) => result,
             result = axum::Server::bind(&addr)
                 .serve(app.into_make_service()) =>

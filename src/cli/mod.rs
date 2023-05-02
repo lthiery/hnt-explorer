@@ -9,8 +9,8 @@ use solana_client::{
 };
 use solana_sdk::pubkey::Pubkey;
 
-mod delegated;
 mod epoch_info;
+mod positions;
 mod server;
 
 #[derive(Debug, clap::Parser)]
@@ -24,7 +24,7 @@ pub struct Cli {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum Cmd {
     /// View information about delegated stakes
-    Delegated(delegated::Delegated),
+    Positions(positions::Positions),
     /// Output epochs to CSV file
     EpochInfo(epoch_info::EpochInfo),
     /// Run server that serves the API
@@ -34,7 +34,7 @@ pub enum Cmd {
 impl Cli {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
         match self.cmd {
-            Cmd::Delegated(cmd) => cmd.run(rpc_client).await,
+            Cmd::Positions(cmd) => cmd.run(rpc_client).await,
             Cmd::EpochInfo(cmd) => cmd.run(rpc_client).await,
             Cmd::Server(cmd) => cmd.run(rpc_client).await,
         }
