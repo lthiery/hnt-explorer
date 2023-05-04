@@ -366,7 +366,7 @@ impl Positions {
                 percentage(d.iot.total.vehnt, delegated_hnt)
             );
             println!(
-                "Total undelegated veHNT: {} ({}% of total)",
+                "Total undelegated veHNT:   {} ({}% of total)",
                 format_vehnt(undelegated_hnt),
                 percentage(undelegated_hnt, d.network.total.vehnt)
             );
@@ -382,16 +382,16 @@ impl Positions {
             format_hnt(d.network.total.hnt)
         );
         println!(
-            "Average multiple   :         {}",
+            "Average multiple       :         {}",
             (d.network.total.vehnt / ANOTHER_DIVIDER) as u64
                 / (d.network.total.hnt / TOKEN_DIVIDER as u64)
         );
         println!(
-            "Average veHNT size:      {}",
+            "Average veHNT size     :      {}",
             format_vehnt(d.network.stats.avg_vehnt)
         );
         println!(
-            "Median veHNT size    :      {}",
+            "Median veHNT size      :      {}",
             format_vehnt(d.network.stats.median_vehnt)
         );
 
