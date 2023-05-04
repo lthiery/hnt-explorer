@@ -155,9 +155,19 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
         [&Pubkey::from_str("hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux")?];
     let mut positions = HashMap::new();
     for (pubkey, position) in positions_data.positions {
-        let position =
-            Position::try_from_positionv0(pubkey, position, d.timestamp, voting_mint_config)?;
-        positions.insert(pubkey, position);
+        if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
+            if mint.to_string().as_str() == HNT_MINT {
+                let position = Position::try_from_positionv0(
+                    pubkey,
+                    position,
+                    d.timestamp,
+                    voting_mint_config,
+                )?;
+                positions.insert(pubkey, position);
+            }
+        } else {
+            println!("No mint found for registrar {}", position.registrar)
+        }
     }
 
     let accounts = get_stake_accounts(rpc_client).await?;
