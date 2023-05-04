@@ -1,5 +1,4 @@
 use super::*;
-use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, clap::Args)]
@@ -15,8 +14,6 @@ use helium_sub_daos::{
 use voter_stake_registry::state::{
     LockupKind, PositionV0, Registrar, VotingMintConfigV0, PRECISION_FACTOR,
 };
-
-const ANOTHER_DIVIDER: u128 = TOKEN_DIVIDER * PRECISION_FACTOR;
 
 #[allow(unused)]
 /// This function can be used when a single query is too big
@@ -51,22 +48,6 @@ async fn get_accounts_with_prefix(
     config.account_config.encoding = Some(UiAccountEncoding::Base64);
     let accounts = rpc_client
         .get_program_accounts_with_config(&helium_dao_id, config)
-        .await?;
-    Ok(accounts)
-}
-
-/// This function will work until there's too many to fetch in a single call
-pub async fn get_all_positions(
-    rpc_client: &RpcClient,
-) -> Result<Vec<(Pubkey, solana_sdk::account::Account)>> {
-    const POSITION_V0_DESCRIMINATAOR: [u8; 8] = [152, 131, 154, 46, 158, 42, 31, 233];
-    let helium_vsr_id = Pubkey::from_str(HELIUM_VSR_ID)?;
-    let mut config = RpcProgramAccountsConfig::default();
-    let memcmp = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &POSITION_V0_DESCRIMINATAOR));
-    config.filters = Some(vec![RpcFilterType::DataSize(180), memcmp]);
-    config.account_config.encoding = Some(UiAccountEncoding::Base64);
-    let accounts = rpc_client
-        .get_program_accounts_with_config(&helium_vsr_id, config)
         .await?;
     Ok(accounts)
 }
@@ -170,15 +151,7 @@ impl PositionData {
 
 pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
     let mut d = PositionData::new();
-    let vsr_accounts = get_all_positions(rpc_client).await?;
-
-    let raw_positions = vsr_accounts
-        .iter()
-        .map(|(pubkey, account)| {
-            let mut data = account.data.as_slice();
-            (*pubkey, PositionV0::try_deserialize(&mut data).unwrap())
-        })
-        .collect::<Vec<(Pubkey, PositionV0)>>();
+    let raw_positions = locked::get_all_positions(rpc_client).await?;
 
     let registrar_keys: Vec<Pubkey> = raw_positions
         .iter()
@@ -445,35 +418,9 @@ impl Positions {
     }
 }
 
-fn format_vehnt(vehnt: u128) -> String {
-    let vehnt = vehnt / ANOTHER_DIVIDER;
-    vehnt
-        .to_string()
-        .as_bytes()
-        .rchunks(3)
-        .rev()
-        .map(std::str::from_utf8)
-        .collect::<std::result::Result<Vec<&str>, _>>()
-        .unwrap()
-        .join(",")
-}
-
 fn percentage(dao_vhnt: u128, total_vhnt: u128) -> String {
     let percent = (dao_vhnt as f64 / total_vhnt as f64) * 100.0;
     format!("{:.2}", percent)
-}
-
-fn format_hnt(vehnt: u64) -> String {
-    let vehnt = vehnt / TOKEN_DIVIDER as u64;
-    vehnt
-        .to_string()
-        .as_bytes()
-        .rchunks(3)
-        .rev()
-        .map(std::str::from_utf8)
-        .collect::<std::result::Result<Vec<&str>, _>>()
-        .unwrap()
-        .join(",")
 }
 
 use helium_api::models::Hnt;

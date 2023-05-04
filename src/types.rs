@@ -8,6 +8,7 @@ pub const IOT_SUBDAO: &str = "39Lw1RH6zt8AJvKn3BTxmUDofzduCM2J3kSaGDZ8L7Sk";
 pub const MOBILE_SUBDAO: &str = "Gm9xDCJawDEKDrrQW6haw94gABaYzQwCq4ZQU8h8bd22";
 
 pub const TOKEN_DIVIDER: u128 = 100_000_000; // 10^8
+pub const ANOTHER_DIVIDER: u128 = TOKEN_DIVIDER * voter_stake_registry::state::PRECISION_FACTOR;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
