@@ -13,6 +13,7 @@ mod epoch_info;
 mod locked;
 mod positions;
 mod server;
+mod supply;
 
 #[derive(Debug, clap::Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"))]
@@ -32,15 +33,18 @@ pub enum Cmd {
     EpochInfo(epoch_info::EpochInfo),
     /// Run server that serves the API
     Server(server::Server),
+    /// Get supply of Helium tokens
+    Supply(supply::Supply),
 }
 
 impl Cli {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
         match self.cmd {
-            Cmd::Positions(cmd) => cmd.run(rpc_client).await,
             Cmd::EpochInfo(cmd) => cmd.run(rpc_client).await,
-            Cmd::Server(cmd) => cmd.run(rpc_client).await,
             Cmd::Locked(cmd) => cmd.run(rpc_client).await,
+            Cmd::Positions(cmd) => cmd.run(rpc_client).await,
+            Cmd::Server(cmd) => cmd.run(rpc_client).await,
+            Cmd::Supply(cmd) => cmd.run(rpc_client).await,
         }
     }
 }
