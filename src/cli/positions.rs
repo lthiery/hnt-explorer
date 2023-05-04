@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, clap::Args)]
 /// Fetches all delegated positions and total HNT, veHNT, and subDAO delegations.
@@ -11,9 +11,7 @@ pub struct Positions {
 use helium_sub_daos::{
     caclulate_vhnt_info, DelegatedPositionV0, PrecisePosition, SubDaoV0, VehntInfo as VehntInfoRaw,
 };
-use voter_stake_registry::state::{
-    LockupKind, PositionV0, Registrar, VotingMintConfigV0, PRECISION_FACTOR,
-};
+use voter_stake_registry::state::{LockupKind, PositionV0, VotingMintConfigV0, PRECISION_FACTOR};
 
 #[allow(unused)]
 /// This function can be used when a single query is too big
@@ -151,38 +149,25 @@ impl PositionData {
 
 pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
     let mut d = PositionData::new();
-    let raw_positions = locked::get_all_positions(rpc_client).await?;
+    let positions_data = locked::get_data(rpc_client).await?;
 
-    let registrar_keys: Vec<Pubkey> = raw_positions
-        .iter()
-        .map(|(_, p)| p.registrar)
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    let registrars_raw = rpc_client.get_multiple_accounts(&registrar_keys).await?;
-    let registrars_raw: Vec<Registrar> = registrars_raw
-        .iter()
-        .map(|registrar| {
-            let mut data = registrar.as_ref().unwrap().data.as_slice();
-            Registrar::try_deserialize(&mut data)
-        })
-        .map(|result| result.unwrap())
-        .collect();
-
-    let mut registrars = HashMap::new();
-    for registrar in registrars_raw.iter() {
-        let mint = &registrar.voting_mints[0];
-        registrars.insert(mint.mint, mint.clone());
-    }
-
-    let voting_mint_config =
-        &registrars[&Pubkey::from_str("hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux")?];
+    let voting_mint_config = &positions_data.mint_configs
+        [&Pubkey::from_str("hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux")?];
     let mut positions = HashMap::new();
-    for (pubkey, position) in raw_positions {
-        let position =
-            Position::try_from_positionv0(pubkey, position, d.timestamp, voting_mint_config)?;
-        positions.insert(pubkey, position);
+    for (pubkey, position) in positions_data.positions {
+        if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
+            if mint.to_string().as_str() == HNT_MINT {
+                let position = Position::try_from_positionv0(
+                    pubkey,
+                    position,
+                    d.timestamp,
+                    voting_mint_config,
+                )?;
+                positions.insert(pubkey, position);
+            }
+        } else {
+            println!("No mint found for registrar {}", position.registrar)
+        }
     }
 
     let accounts = get_stake_accounts(rpc_client).await?;
@@ -381,7 +366,7 @@ impl Positions {
                 percentage(d.iot.total.vehnt, delegated_hnt)
             );
             println!(
-                "Total undelegated veHNT: {} ({}% of total)",
+                "Total undelegated veHNT:   {} ({}% of total)",
                 format_vehnt(undelegated_hnt),
                 percentage(undelegated_hnt, d.network.total.vehnt)
             );
@@ -397,16 +382,16 @@ impl Positions {
             format_hnt(d.network.total.hnt)
         );
         println!(
-            "Average multiple   :         {}",
+            "Average multiple       :         {}",
             (d.network.total.vehnt / ANOTHER_DIVIDER) as u64
                 / (d.network.total.hnt / TOKEN_DIVIDER as u64)
         );
         println!(
-            "Average veHNT size:      {}",
+            "Average veHNT size     :      {}",
             format_vehnt(d.network.stats.avg_vehnt)
         );
         println!(
-            "Median veHNT size    :      {}",
+            "Median veHNT size      :      {}",
             format_vehnt(d.network.stats.median_vehnt)
         );
 
