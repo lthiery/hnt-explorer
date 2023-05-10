@@ -195,7 +195,7 @@ pub async fn get_data(
             delegated_position,
             &epoch_info,
             position_v0,
-            &voting_mint_config,
+            voting_mint_config,
         )?);
         d.delegated_positions
             .push(PositionLegacy::from(position.clone()));
@@ -508,16 +508,12 @@ impl DelegatedPosition {
 
             let (delegation_rewards_issued, vehnt_at_epoch_start) = match sub_dao {
                 SubDao::Mobile => (epoch_summary.mobile_delegation_rewards_issued as u128, {
-                    let mut mobile_vehnt = epoch_summary
-                        .mobile_vehnt_at_epoch_start
-                        .get_decimal()
-                        .clone();
+                    let mut mobile_vehnt = *epoch_summary.mobile_vehnt_at_epoch_start.get_decimal();
                     mobile_vehnt.set_scale(0)?;
                     mobile_vehnt.to_u128().unwrap()
                 }),
                 SubDao::Iot => (epoch_summary.iot_delegation_rewards_issued as u128, {
-                    let mut mobile_vehnt =
-                        epoch_summary.iot_vehnt_at_epoch_start.get_decimal().clone();
+                    let mut mobile_vehnt = *epoch_summary.iot_vehnt_at_epoch_start.get_decimal();
                     mobile_vehnt.set_scale(0)?;
                     mobile_vehnt.to_u128().unwrap()
                 }),
@@ -525,7 +521,7 @@ impl DelegatedPosition {
             };
 
             pending_rewards += u64::try_from(
-                (delegated_vehnt_at_epoch as u128)
+                delegated_vehnt_at_epoch
                     .checked_mul(delegation_rewards_issued)
                     .unwrap()
                     .checked_div(vehnt_at_epoch_start)

@@ -3,9 +3,9 @@ use super::*;
 use crate::types::SubDao;
 use axum::{
     body::{self, Empty, Full},
+    extract::Path,
     http::{header, HeaderValue},
     response::{IntoResponse, Response},
-    extract::Path,
 };
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
@@ -286,7 +286,7 @@ pub async fn positions(
 pub async fn position(
     Extension(memory): Extension<Arc<Mutex<Memory>>>,
     Path(position): Path<String>,
-)  -> HandlerResult {
+) -> HandlerResult {
     if let Ok(pubkey) = Pubkey::from_str(&position) {
         let memory = memory.lock().await;
         if let Some(position) = memory.position.get(&pubkey) {
@@ -294,18 +294,16 @@ pub async fn position(
         } else {
             Err((
                 StatusCode::NOT_FOUND,
-                format!("\"{position}\" is not a known position from the voter stake registry")
+                format!("\"{position}\" is not a known position from the voter stake registry"),
             ))
         }
-
     } else {
         Err((
             StatusCode::BAD_REQUEST,
-            format!("\"{position}\" is not a valid base58 encoded Solana pubkey")
+            format!("\"{position}\" is not a valid base58 encoded Solana pubkey"),
         ))
     }
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct QueryParamsMetadata {
