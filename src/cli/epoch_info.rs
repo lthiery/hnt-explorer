@@ -69,7 +69,7 @@ pub async fn get_epoch_summaries(rpc_client: &RpcClient) -> Result<Vec<EpochSumm
                         mobile_delegation_rewards_issued: mobile.delegation_rewards_issued,
                         iot_utility_score: iot.utility_score,
                         mobile_utility_score: mobile.utility_score,
-                        epoch_start_at_ts: iot.rewards_issued_at_ts.map(|t| t - (24 * 60 * 60)),
+                        epoch_start_at_ts: iot.start_ts,
                         rewards_issued_at_ts: iot.rewards_issued_at_ts,
                         rewards_issued_at: iot.rewards_issued_at,
                         initialized: true,
@@ -120,6 +120,7 @@ pub struct SubDaoEpochInfo {
     pub delegation_rewards_issued: u64,
     /// Precise number with 12 decimals
     pub utility_score: Option<u128>,
+    pub start_ts: Option<i64>,
     /// The program only needs to know whether or not rewards were issued, however having a history of when they were issued could prove
     /// useful in the future, or at least for debugging purposes
     pub rewards_issued_at_ts: Option<i64>,
@@ -192,6 +193,11 @@ impl TryFrom<SubDaoEpochInfoV0> for SubDaoEpochInfo {
             fall_rates_from_closing_positions: value.fall_rates_from_closing_positions,
             delegation_rewards_issued: value.delegation_rewards_issued,
             utility_score: value.utility_score,
+            start_ts: if value.rewards_issued_at.is_some() {
+                Some(value.start_ts())
+            } else {
+                None
+            },
             rewards_issued_at_ts: value.rewards_issued_at,
             rewards_issued_at: value
                 .rewards_issued_at
@@ -222,5 +228,11 @@ impl TryFrom<u64> for VeHnt {
         let mut value = Decimal::from_u64(value).unwrap();
         value.set_scale(8).unwrap();
         Ok(Self(value))
+    }
+}
+
+impl VeHnt {
+    pub fn get_decimal(&self) -> &Decimal {
+        &self.0
     }
 }

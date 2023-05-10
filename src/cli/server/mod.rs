@@ -35,9 +35,10 @@ impl Server {
         let epoch_info_memory = epoch_info::Memory::new(&rpc_client).await?;
         let epoch_info_memory = Arc::new(Mutex::new(epoch_info_memory));
         println!("epoch_info data intialized...");
-        let delegated_memory = positions::Memory::new(&rpc_client).await?;
-        let delegated_memory = Arc::new(Mutex::new(delegated_memory));
-        println!("delegated_memory data initialized!");
+        let positions_memory =
+            positions::Memory::new(&rpc_client, epoch_info_memory.clone()).await?;
+        let positions_memory = Arc::new(Mutex::new(positions_memory));
+        println!("positions_memory data initialized!");
 
         println!("Server initialized!");
 
@@ -59,7 +60,7 @@ impl Server {
                 get(positions::server_latest_positions_as_csv),
             )
             .route("/v1/epoch/info", get(epoch_info::get))
-            .layer(Extension(delegated_memory.clone()))
+            .layer(Extension(positions_memory.clone()))
             .layer(Extension(epoch_info_memory.clone()));
 
         let server_endpoint = std::env::var("PORT").unwrap_or("3000".to_string());
@@ -68,7 +69,7 @@ impl Server {
 
         // run it with hyper on localhost:3000
         tokio::select!(
-            result = positions::get_positions(rpc_client.clone(), delegated_memory) => result,
+            result = positions::get_positions(rpc_client.clone(), positions_memory, epoch_info_memory.clone()) => result,
             result = epoch_info::get_epoch_info(rpc_client, epoch_info_memory) => result,
             result = axum::Server::bind(&addr)
                 .serve(app.into_make_service()) =>

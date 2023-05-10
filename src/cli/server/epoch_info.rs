@@ -5,7 +5,7 @@ use chrono::{Datelike, Utc};
 
 #[derive(Debug)]
 pub struct Memory {
-    latest_data: Arc<Vec<EpochSummary>>,
+    pub latest_data: Arc<Vec<EpochSummary>>,
 }
 
 impl Memory {

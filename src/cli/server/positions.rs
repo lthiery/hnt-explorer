@@ -22,8 +22,11 @@ impl Memory {
         format!("./positions_{}.csv", self.latest_data.timestamp)
     }
 
-    pub async fn new(rpc_client: &Arc<RpcClient>) -> Result<Memory> {
-        let latest_data = Arc::new(Self::pull_latest_data(rpc_client).await?);
+    pub async fn new(
+        rpc_client: &Arc<RpcClient>,
+        epoch_memory: Arc<Mutex<epoch_info::Memory>>,
+    ) -> Result<Memory> {
+        let latest_data = Arc::new(Self::pull_latest_data(rpc_client, epoch_memory).await?);
         let mut data = HashMap::new();
         data.insert(latest_data.timestamp, latest_data.clone());
         let memory = Memory { data, latest_data };
@@ -50,6 +53,7 @@ impl Memory {
             pub delegated_position_key: Option<&'a str>,
             pub delegated_sub_dao: Option<SubDao>,
             pub delagated_last_claimed_epoch: Option<u64>,
+            pub delegated_pending_rewards: Option<u64>,
         }
 
         use csv::Writer;
@@ -69,6 +73,7 @@ impl Memory {
                     delegated_position_key: Some(&delegated.delegated_position_key),
                     delegated_sub_dao: Some(delegated.sub_dao),
                     delagated_last_claimed_epoch: Some(delegated.last_claimed_epoch),
+                    delegated_pending_rewards: Some(delegated.pending_rewards),
                 })?;
             } else {
                 position_wtr.serialize(Position {
@@ -83,6 +88,7 @@ impl Memory {
                     delegated_position_key: None,
                     delegated_sub_dao: None,
                     delagated_last_claimed_epoch: None,
+                    delegated_pending_rewards: None,
                 })?;
             }
         }
@@ -92,8 +98,15 @@ impl Memory {
         Ok(())
     }
 
-    async fn pull_latest_data(rpc_client: &Arc<RpcClient>) -> Result<positions::PositionData> {
-        let mut latest_data = positions::get_data(rpc_client).await?;
+    async fn pull_latest_data(
+        rpc_client: &Arc<RpcClient>,
+        epoch_summaries: Arc<Mutex<epoch_info::Memory>>,
+    ) -> Result<positions::PositionData> {
+        let epoch_summaries = {
+            let lock = epoch_summaries.lock().await;
+            lock.latest_data.clone()
+        };
+        let mut latest_data = positions::get_data(rpc_client, epoch_summaries).await?;
         latest_data.scale_down();
         Ok(latest_data)
     }
@@ -294,13 +307,17 @@ pub struct Metadata {
     pub undelegated: positions::Data,
 }
 
-pub async fn get_positions(rpc_client: Arc<RpcClient>, memory: Arc<Mutex<Memory>>) -> Result {
+pub async fn get_positions(
+    rpc_client: Arc<RpcClient>,
+    memory: Arc<Mutex<Memory>>,
+    epoch_memory: Arc<Mutex<epoch_info::Memory>>,
+) -> Result {
     loop {
         time::sleep(time::Duration::from_secs(60 * 5)).await;
         println!("Pulling latest data");
-        let mut latest_data = Memory::pull_latest_data(&rpc_client).await;
+        let mut latest_data = Memory::pull_latest_data(&rpc_client, epoch_memory.clone()).await;
         while latest_data.is_err() {
-            latest_data = Memory::pull_latest_data(&rpc_client).await;
+            latest_data = Memory::pull_latest_data(&rpc_client, epoch_memory.clone()).await;
         }
         {
             let mut memory = memory.lock().await;
