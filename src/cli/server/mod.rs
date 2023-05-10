@@ -54,6 +54,7 @@ impl Server {
                 get(positions::positions_metadata),
             )
             .route("/v1/positions", get(positions::positions))
+            .route("/v1/positions/:position", get(positions::position))
             .route("/v1/positions/info", get(positions::positions_metadata))
             .route(
                 "/v1/positions/csv",

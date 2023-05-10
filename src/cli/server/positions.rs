@@ -5,11 +5,15 @@ use axum::{
     body::{self, Empty, Full},
     http::{header, HeaderValue},
     response::{IntoResponse, Response},
+    extract::Path,
 };
+use solana_sdk::pubkey::Pubkey;
+use std::str::FromStr;
 use tokio::{fs::File, io::AsyncReadExt};
 #[derive(Debug)]
 pub struct Memory {
     data: HashMap<i64, Arc<positions::PositionData>>,
+    position: HashMap<Pubkey, positions::Position>,
     pub latest_data: Arc<positions::PositionData>,
 }
 
@@ -29,7 +33,19 @@ impl Memory {
         let latest_data = Arc::new(Self::pull_latest_data(rpc_client, epoch_memory).await?);
         let mut data = HashMap::new();
         data.insert(latest_data.timestamp, latest_data.clone());
-        let memory = Memory { data, latest_data };
+
+        let position = latest_data
+            .positions
+            .iter()
+            .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
+            .collect();
+
+        let memory = Memory {
+            data,
+            latest_data,
+            position,
+        };
+
         memory.write_latest_to_csv()?;
         Ok(memory)
     }
@@ -117,6 +133,13 @@ impl Memory {
         let previous_file = self.latest_delegated_positions_file();
         let latest_data = Arc::new(latest_data);
         self.latest_data = latest_data.clone();
+
+        // organize into positions
+        self.position = latest_data
+            .positions
+            .iter()
+            .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
+            .collect();
 
         // start a new Hashmap
         let mut data = HashMap::new();
@@ -259,6 +282,30 @@ pub async fn positions(
 
     Ok(response::Json(json!(data)))
 }
+
+pub async fn position(
+    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Path(position): Path<String>,
+)  -> HandlerResult {
+    if let Ok(pubkey) = Pubkey::from_str(&position) {
+        let memory = memory.lock().await;
+        if let Some(position) = memory.position.get(&pubkey) {
+            Ok(response::Json(json!(position)))
+        } else {
+            Err((
+                StatusCode::NOT_FOUND,
+                format!("\"{position}\" is not a known position from the voter stake registry")
+            ))
+        }
+
+    } else {
+        Err((
+            StatusCode::BAD_REQUEST,
+            format!("\"{position}\" is not a valid base58 encoded Solana pubkey")
+        ))
+    }
+}
+
 
 #[derive(Debug, Deserialize)]
 pub struct QueryParamsMetadata {
