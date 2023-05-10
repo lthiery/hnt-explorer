@@ -1,5 +1,6 @@
 use super::*;
-use std::collections::HashMap;
+use rust_decimal::prelude::ToPrimitive;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug, Clone, clap::Args)]
 /// Fetches all delegated positions and total HNT, veHNT, and subDAO delegations.
@@ -50,7 +51,7 @@ async fn get_accounts_with_prefix(
     Ok(accounts)
 }
 
-#[derive(Default, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PositionData {
     pub timestamp: i64,
     pub positions: Vec<Position>,
@@ -147,16 +148,21 @@ impl PositionData {
     }
 }
 
-pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
+pub async fn get_data(
+    rpc_client: &RpcClient,
+    epoch_info: Arc<Vec<epoch_info::EpochSummary>>,
+) -> Result<PositionData> {
     let mut d = PositionData::new();
     let positions_data = locked::get_data(rpc_client).await?;
 
     let voting_mint_config = &positions_data.mint_configs
         [&Pubkey::from_str("hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux")?];
+    let mut positions_raw = HashMap::new();
     let mut positions = HashMap::new();
     for (pubkey, position) in positions_data.positions {
         if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
             if mint.to_string().as_str() == HNT_MINT {
+                positions_raw.insert(pubkey, position.clone());
                 let position = Position::try_from_positionv0(
                     pubkey,
                     position,
@@ -182,10 +188,14 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<PositionData> {
 
     for (pubkey, delegated_position) in delegated_positions {
         let delegated_position = delegated_position;
+        let position_v0 = positions_raw.get(&delegated_position.position).unwrap();
         let mut position = positions.get_mut(&delegated_position.position).unwrap();
         position.delegated = Some(DelegatedPosition::try_from_delegated_position_v0(
             *pubkey,
             delegated_position,
+            &epoch_info,
+            position_v0,
+            voting_mint_config,
         )?);
         d.delegated_positions
             .push(PositionLegacy::from(position.clone()));
@@ -303,7 +313,8 @@ fn get_stats(
 
 impl Positions {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
-        let d = get_data(&rpc_client).await?;
+        let epoch_summaries = epoch_info::get_epoch_summaries(&rpc_client).await?;
+        let d = get_data(&rpc_client, epoch_summaries.into()).await?;
         if self.verify {
             let iot_sub_dao_raw = rpc_client
                 .get_account(&Pubkey::from_str(IOT_SUBDAO).unwrap())
@@ -466,16 +477,63 @@ pub struct DelegatedPosition {
     pub delegated_position_key: String,
     pub sub_dao: SubDao,
     pub last_claimed_epoch: u64,
+    pub pending_rewards: u64,
 }
 
 impl DelegatedPosition {
     fn try_from_delegated_position_v0(
         delegated_position_key: Pubkey,
         delegated_position: DelegatedPositionV0,
+        epochs: &[epoch_info::EpochSummary],
+        position: &PositionV0,
+        voting_mint_config: &VotingMintConfigV0,
     ) -> Result<Self> {
+        let mut pending_rewards = 0;
+        const FIRST_EPOCH: usize = 19465;
+        const FIRST_EPOCH_WITH_VEHNT: usize = 19467;
+
+        let first_unclaimed_epoch = std::cmp::max(
+            (delegated_position.last_claimed_epoch + 1) as usize,
+            FIRST_EPOCH_WITH_VEHNT,
+        );
+        // the last epochs is initialized but incomplete
+        let last_reward_epoch = epochs.len() - 1 + FIRST_EPOCH;
+        let sub_dao = SubDao::try_from(delegated_position.sub_dao)?;
+
+        for i in first_unclaimed_epoch..last_reward_epoch {
+            let epoch_summary = &epochs[i - FIRST_EPOCH];
+            assert_eq!(epoch_summary.epoch, i as u64);
+            let ts = epoch_summary.epoch_start_at_ts.unwrap();
+            let delegated_vehnt_at_epoch = position.voting_power(voting_mint_config, ts)? as u128;
+
+            let (delegation_rewards_issued, vehnt_at_epoch_start) = match sub_dao {
+                SubDao::Mobile => (epoch_summary.mobile_delegation_rewards_issued as u128, {
+                    let mut mobile_vehnt = *epoch_summary.mobile_vehnt_at_epoch_start.get_decimal();
+                    mobile_vehnt.set_scale(0)?;
+                    mobile_vehnt.to_u128().unwrap()
+                }),
+                SubDao::Iot => (epoch_summary.iot_delegation_rewards_issued as u128, {
+                    let mut mobile_vehnt = *epoch_summary.iot_vehnt_at_epoch_start.get_decimal();
+                    mobile_vehnt.set_scale(0)?;
+                    mobile_vehnt.to_u128().unwrap()
+                }),
+                _ => panic!("Error: calculating earnings for undelegated position?!"),
+            };
+
+            pending_rewards += u64::try_from(
+                delegated_vehnt_at_epoch
+                    .checked_mul(delegation_rewards_issued)
+                    .unwrap()
+                    .checked_div(vehnt_at_epoch_start)
+                    .unwrap(),
+            )
+            .unwrap();
+        }
+
         Ok(Self {
+            pending_rewards,
             delegated_position_key: delegated_position_key.to_string(),
-            sub_dao: SubDao::try_from(delegated_position.sub_dao)?,
+            sub_dao,
             last_claimed_epoch: delegated_position.last_claimed_epoch,
         })
     }

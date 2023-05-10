@@ -3,13 +3,17 @@ use super::*;
 use crate::types::SubDao;
 use axum::{
     body::{self, Empty, Full},
+    extract::Path,
     http::{header, HeaderValue},
     response::{IntoResponse, Response},
 };
+use solana_sdk::pubkey::Pubkey;
+use std::str::FromStr;
 use tokio::{fs::File, io::AsyncReadExt};
 #[derive(Debug)]
 pub struct Memory {
     data: HashMap<i64, Arc<positions::PositionData>>,
+    position: HashMap<Pubkey, positions::Position>,
     pub latest_data: Arc<positions::PositionData>,
 }
 
@@ -22,11 +26,26 @@ impl Memory {
         format!("./positions_{}.csv", self.latest_data.timestamp)
     }
 
-    pub async fn new(rpc_client: &Arc<RpcClient>) -> Result<Memory> {
-        let latest_data = Arc::new(Self::pull_latest_data(rpc_client).await?);
+    pub async fn new(
+        rpc_client: &Arc<RpcClient>,
+        epoch_memory: Arc<Mutex<epoch_info::Memory>>,
+    ) -> Result<Memory> {
+        let latest_data = Arc::new(Self::pull_latest_data(rpc_client, epoch_memory).await?);
         let mut data = HashMap::new();
         data.insert(latest_data.timestamp, latest_data.clone());
-        let memory = Memory { data, latest_data };
+
+        let position = latest_data
+            .positions
+            .iter()
+            .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
+            .collect();
+
+        let memory = Memory {
+            data,
+            latest_data,
+            position,
+        };
+
         memory.write_latest_to_csv()?;
         Ok(memory)
     }
@@ -50,6 +69,7 @@ impl Memory {
             pub delegated_position_key: Option<&'a str>,
             pub delegated_sub_dao: Option<SubDao>,
             pub delagated_last_claimed_epoch: Option<u64>,
+            pub delegated_pending_rewards: Option<u64>,
         }
 
         use csv::Writer;
@@ -69,6 +89,7 @@ impl Memory {
                     delegated_position_key: Some(&delegated.delegated_position_key),
                     delegated_sub_dao: Some(delegated.sub_dao),
                     delagated_last_claimed_epoch: Some(delegated.last_claimed_epoch),
+                    delegated_pending_rewards: Some(delegated.pending_rewards),
                 })?;
             } else {
                 position_wtr.serialize(Position {
@@ -83,6 +104,7 @@ impl Memory {
                     delegated_position_key: None,
                     delegated_sub_dao: None,
                     delagated_last_claimed_epoch: None,
+                    delegated_pending_rewards: None,
                 })?;
             }
         }
@@ -92,8 +114,15 @@ impl Memory {
         Ok(())
     }
 
-    async fn pull_latest_data(rpc_client: &Arc<RpcClient>) -> Result<positions::PositionData> {
-        let mut latest_data = positions::get_data(rpc_client).await?;
+    async fn pull_latest_data(
+        rpc_client: &Arc<RpcClient>,
+        epoch_summaries: Arc<Mutex<epoch_info::Memory>>,
+    ) -> Result<positions::PositionData> {
+        let epoch_summaries = {
+            let lock = epoch_summaries.lock().await;
+            lock.latest_data.clone()
+        };
+        let mut latest_data = positions::get_data(rpc_client, epoch_summaries).await?;
         latest_data.scale_down();
         Ok(latest_data)
     }
@@ -104,6 +133,13 @@ impl Memory {
         let previous_file = self.latest_delegated_positions_file();
         let latest_data = Arc::new(latest_data);
         self.latest_data = latest_data.clone();
+
+        // organize into positions
+        self.position = latest_data
+            .positions
+            .iter()
+            .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
+            .collect();
 
         // start a new Hashmap
         let mut data = HashMap::new();
@@ -247,6 +283,28 @@ pub async fn positions(
     Ok(response::Json(json!(data)))
 }
 
+pub async fn position(
+    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Path(position): Path<String>,
+) -> HandlerResult {
+    if let Ok(pubkey) = Pubkey::from_str(&position) {
+        let memory = memory.lock().await;
+        if let Some(position) = memory.position.get(&pubkey) {
+            Ok(response::Json(json!(position)))
+        } else {
+            Err((
+                StatusCode::NOT_FOUND,
+                format!("\"{position}\" is not a known position from the voter stake registry"),
+            ))
+        }
+    } else {
+        Err((
+            StatusCode::BAD_REQUEST,
+            format!("\"{position}\" is not a valid base58 encoded Solana pubkey"),
+        ))
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct QueryParamsMetadata {
     timestamp: Option<i64>,
@@ -294,13 +352,17 @@ pub struct Metadata {
     pub undelegated: positions::Data,
 }
 
-pub async fn get_positions(rpc_client: Arc<RpcClient>, memory: Arc<Mutex<Memory>>) -> Result {
+pub async fn get_positions(
+    rpc_client: Arc<RpcClient>,
+    memory: Arc<Mutex<Memory>>,
+    epoch_memory: Arc<Mutex<epoch_info::Memory>>,
+) -> Result {
     loop {
         time::sleep(time::Duration::from_secs(60 * 5)).await;
         println!("Pulling latest data");
-        let mut latest_data = Memory::pull_latest_data(&rpc_client).await;
+        let mut latest_data = Memory::pull_latest_data(&rpc_client, epoch_memory.clone()).await;
         while latest_data.is_err() {
-            latest_data = Memory::pull_latest_data(&rpc_client).await;
+            latest_data = Memory::pull_latest_data(&rpc_client, epoch_memory.clone()).await;
         }
         {
             let mut memory = memory.lock().await;
