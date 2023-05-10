@@ -38,6 +38,10 @@ If using more than one parameter at a time, all parameters must be encapsulated 
 https://hnt-explorer.herokuapp.com/v1/positions?"timestamp=1682720623?start=500"
 ```
 
+GET [`/v1/positions/{position}`](https://hnt-explorer.herokuapp.com/v1/positions)
+
+Provides data of a specific position, including most recently derived veHNT (at most 5 minutes old) and pending rewards.
+
 GET [`/v1/positions/csv`](https://hnt-explorer.herokuapp.com/v1/positions/csv)
 
 Serves most recent list of all positions as a CSV file.
