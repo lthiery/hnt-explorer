@@ -36,6 +36,8 @@ pub enum Error {
     SolanaProgram(#[from] solana_program::program_error::ProgramError),
     #[error("UnexpectedProgramName")]
     UnexpectedProgramName,
+    #[error("serde json error: {0}")]
+    SerdeJson(#[from] serde_json::Error),
 }
 
 impl From<anchor_lang::error::Error> for Error {

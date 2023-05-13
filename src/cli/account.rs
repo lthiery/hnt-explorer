@@ -9,28 +9,53 @@ pub struct Account {
 impl Account {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
         let rpc_client = Arc::new(rpc_client);
-        let hnt_account =
-            get_account(&rpc_client, &Pubkey::from_str(HNT_MINT)?, &self.account).await?;
-        if let Some(account) = hnt_account {
-            println!("HNT    : {}", format_hnt(account.token));
-        } else {
-            println!("HNT    : 0");
-        }
-        let iot_account =
-            get_account(&rpc_client, &Pubkey::from_str(IOT_MINT)?, &self.account).await?;
-        if let Some(account) = iot_account {
-            println!("IOT    : {}", format_dnt(account.token));
-        } else {
-            println!("IOT    : 0");
-        }
-        let mobile_account =
-            get_account(&rpc_client, &Pubkey::from_str(MOBILE_MINT)?, &self.account).await?;
-        if let Some(account) = mobile_account {
-            println!("MOBILE : {:?}", format_dnt(account.token));
-        } else {
-            println!("MOBILE : 0");
-        }
+        let helium_balances = HeliumBalances::fetch(&rpc_client, &self.account).await?;
+        let output = serde_json::to_string_pretty(&helium_balances)?;
+        println!("{}", output);
         Ok(())
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct HeliumBalances {
+    hnt: Balance,
+    iot: Balance,
+    mobile: Balance,
+}
+
+#[derive(serde::Serialize)]
+struct Balance {
+    mint: String,
+    value: u64,
+    decimals: u8,
+}
+
+impl HeliumBalances {
+    pub async fn fetch(rpc_client: &Arc<RpcClient>, account: &Pubkey) -> Result<Self> {
+        let hnt_account = get_account(rpc_client, &Pubkey::from_str(HNT_MINT)?, account).await?;
+
+        let iot_account = get_account(rpc_client, &Pubkey::from_str(IOT_MINT)?, account).await?;
+
+        let mobile_account =
+            get_account(rpc_client, &Pubkey::from_str(MOBILE_MINT)?, account).await?;
+
+        Ok(Self {
+            hnt: Balance {
+                mint: HNT_MINT.to_string(),
+                value: hnt_account.token,
+                decimals: 8,
+            },
+            iot: Balance {
+                mint: IOT_MINT.to_string(),
+                value: iot_account.token,
+                decimals: 6,
+            },
+            mobile: Balance {
+                mint: MOBILE_MINT.to_string(),
+                value: mobile_account.token,
+                decimals: 6,
+            },
+        })
     }
 }
 
@@ -52,7 +77,7 @@ async fn get_account(
     rpc_client: &Arc<RpcClient>,
     mint: &Pubkey,
     pubkey: &Pubkey,
-) -> Result<Option<SplAccount>> {
+) -> Result<SplAccount> {
     let spl_atc = spl_associated_token_account::get_associated_token_address(pubkey, mint);
     let program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap();
 
@@ -71,15 +96,19 @@ async fn get_account(
                         StateWithExtensions::<spl_token_2022::state::Account>::unpack(
                             &account.data,
                         )?;
-                    Ok(Some(SplAccount {
+                    Ok(SplAccount {
                         mint: *mint,
                         lamports: account.lamports,
                         token: account_data.base.amount,
-                    }))
+                    })
                 }
                 _ => Err(Error::UnexpectedProgramName),
             }
         }
-        None => Ok(None),
+        None => Ok(SplAccount {
+            mint: *mint,
+            lamports: 0,
+            token: 0,
+        }),
     }
 }

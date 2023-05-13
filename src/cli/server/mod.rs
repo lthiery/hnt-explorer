@@ -15,6 +15,7 @@ use tokio::time;
 pub type Result<T = ()> = std::result::Result<T, Error>;
 pub type HandlerResult = std::result::Result<response::Json<Value>, (StatusCode, String)>;
 
+mod account;
 mod epoch_info;
 mod positions;
 
@@ -44,6 +45,7 @@ impl Server {
 
         // build our application with a route
         let app = Router::new()
+            .route("/v1/account/:account", get(account::get_account))
             .route("/v1/delegated_stakes", get(positions::delegated_stakes))
             .route(
                 "/v1/delegated_stakes/csv",
@@ -61,6 +63,7 @@ impl Server {
                 get(positions::server_latest_positions_as_csv),
             )
             .route("/v1/epoch/info", get(epoch_info::get))
+            .layer(Extension(rpc_client.clone()))
             .layer(Extension(positions_memory.clone()))
             .layer(Extension(epoch_info_memory.clone()));
 
