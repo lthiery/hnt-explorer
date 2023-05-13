@@ -30,6 +30,14 @@ pub enum Error {
     Axum(#[from] axum::BoxError),
     #[error("{0}")]
     Custom(&'static str),
+    #[error("SolanaProgramIdNotParsable: {0}")]
+    SolanaProgramIdNotParsable(String),
+    #[error("SolanaProgramError: {0}")]
+    SolanaProgram(#[from] solana_program::program_error::ProgramError),
+    #[error("UnexpectedProgramName")]
+    UnexpectedProgramName,
+    #[error("serde json error: {0}")]
+    SerdeJson(#[from] serde_json::Error),
 }
 
 impl From<anchor_lang::error::Error> for Error {
