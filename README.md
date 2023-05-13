@@ -20,6 +20,9 @@ Prepend the paths below with the endpoint.
 
 ## Endpoints 
 
+GET `/v1/accounts/{account}`
+Provides Helium SPL token balances for a given account.
+
 GET [`/v1/positions`](https://hnt-explorer.herokuapp.com/v1/positions)
 
 Params: `limit`, `start`, `timestamp`
@@ -37,9 +40,6 @@ If using more than one parameter at a time, all parameters must be encapsulated 
 ```
 https://hnt-explorer.herokuapp.com/v1/positions?"timestamp=1682720623?start=500"
 ```
-
-GET `/v1/accounts/{account}`
-Provides Helium SPL token balances for a given account.
 
 GET `/v1/positions/{position}`
 

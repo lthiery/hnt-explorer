@@ -9,7 +9,7 @@ use solana_client::{
 };
 use solana_sdk::pubkey::Pubkey;
 
-mod account;
+mod accounts;
 mod epoch_info;
 mod locked;
 mod positions;
@@ -27,7 +27,7 @@ pub struct Cli {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum Cmd {
     /// View account information
-    Account(account::Account),
+    Account(accounts::Account),
     /// View locked HNT
     Locked(locked::Locked),
     /// View information about delegated stakes

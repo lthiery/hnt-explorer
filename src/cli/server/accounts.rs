@@ -3,7 +3,7 @@ use axum::extract::Path;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
-use crate::cli::account::HeliumBalances;
+use crate::cli::accounts::HeliumBalances;
 
 pub async fn get_account(
     Extension(rpc_client): Extension<Arc<RpcClient>>,
