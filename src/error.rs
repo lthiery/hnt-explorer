@@ -1,3 +1,4 @@
+use crate::rpc;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -38,6 +39,8 @@ pub enum Error {
     UnexpectedProgramName,
     #[error("serde json error: {0}")]
     SerdeJson(#[from] serde_json::Error),
+    #[error("rpc error: {0}")]
+    Rpc(#[from] rpc::Error),
 }
 
 impl From<anchor_lang::error::Error> for Error {

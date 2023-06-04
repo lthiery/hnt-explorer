@@ -168,7 +168,8 @@ pub async fn get_data(
                     position,
                     d.timestamp,
                     voting_mint_config,
-                )?;
+                )
+                .await?;
                 positions.insert(pubkey, position);
             }
         } else {
@@ -423,6 +424,7 @@ use helium_api::models::Hnt;
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Position {
+    pub owner: String,
     pub position_key: String,
     pub hnt_amount: u64,
     pub start_ts: i64,
@@ -549,17 +551,21 @@ pub enum LockupType {
 }
 
 impl Position {
-    pub fn try_from_positionv0(
+    pub async fn try_from_positionv0(
         position_key: Pubkey,
         position: PositionV0,
         timestamp: i64,
         voting_mint_config: &VotingMintConfigV0,
     ) -> Result<Self> {
+        let position_key = position_key.to_string();
+        let client = rpc::Client::default();
+        let owner = rpc::get_position_owner(&client, &position_key).await?;
         let vehnt_info = caclulate_vhnt_info(timestamp, &position, voting_mint_config)?;
         let vehnt = position.voting_power_precise(voting_mint_config, timestamp)?;
 
         Ok(Self {
-            position_key: position_key.to_string(),
+            owner: owner.to_string(),
+            position_key,
             hnt_amount: position.amount_deposited_native,
             start_ts: position.lockup.start_ts,
             end_ts: position.lockup.end_ts,
