@@ -18,7 +18,7 @@ mod supply;
 
 #[derive(Debug, clap::Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"))]
-#[clap(about = "helium-program-api")]
+#[clap(about = "hnt-explorer-api")]
 pub struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

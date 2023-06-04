@@ -16,7 +16,7 @@ impl Supply {
         let mobile_supply = get_token_supply(&rpc_client, Pubkey::from_str(MOBILE_MINT)?).await?;
         println!("MOBILE supply: {}", format_dnt(mobile_supply as u64));
         let iot_supply = get_token_supply(&rpc_client, Pubkey::from_str(IOT_MINT)?).await?;
-        println!("HNT supply   : {}", format_dnt(iot_supply as u64));
+        println!("IOT supply   : {}", format_dnt(iot_supply as u64));
         Ok(())
     }
 }
