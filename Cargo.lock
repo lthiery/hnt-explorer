@@ -2043,6 +2043,7 @@ dependencies = [
  "clap 4.2.4",
  "csv",
  "fanout",
+ "futures",
  "helium-api",
  "helium-crypto",
  "helium-sub-daos",

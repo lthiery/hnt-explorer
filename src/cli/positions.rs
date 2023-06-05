@@ -159,11 +159,21 @@ pub async fn get_data(
         [&Pubkey::from_str("hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux")?];
     let mut positions_raw = HashMap::new();
     let mut positions = HashMap::new();
-    for (pubkey, position) in positions_data.positions {
+
+    let client = rpc::Client::default();
+    let position_keys = positions_data.positions.iter().map(|p| &p.0).collect();
+    let position_owners = rpc::get_positions_owner(&client, &position_keys, 100).await?;
+
+    for ((pubkey, position), owner) in positions_data
+        .positions
+        .into_iter()
+        .zip(position_owners.into_iter())
+    {
         if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
             if mint.to_string().as_str() == HNT_MINT {
                 positions_raw.insert(pubkey, position.clone());
                 let position = Position::try_from_positionv0(
+                    owner,
                     pubkey,
                     position,
                     d.timestamp,
@@ -552,20 +562,18 @@ pub enum LockupType {
 
 impl Position {
     pub async fn try_from_positionv0(
+        owner: Pubkey,
         position_key: Pubkey,
         position: PositionV0,
         timestamp: i64,
         voting_mint_config: &VotingMintConfigV0,
     ) -> Result<Self> {
-        let position_key = position_key.to_string();
-        let client = rpc::Client::default();
-        let owner = rpc::get_position_owner(&client, &position_key).await?;
         let vehnt_info = caclulate_vhnt_info(timestamp, &position, voting_mint_config)?;
         let vehnt = position.voting_power_precise(voting_mint_config, timestamp)?;
 
         Ok(Self {
             owner: owner.to_string(),
-            position_key,
+            position_key: position_key.to_string(),
             hnt_amount: position.amount_deposited_native,
             start_ts: position.lockup.start_ts,
             end_ts: position.lockup.end_ts,
