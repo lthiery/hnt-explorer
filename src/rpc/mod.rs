@@ -90,36 +90,42 @@ impl Client {
     }
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
-pub(crate) struct NodeCall {
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct NodeCall<'se> {
     jsonrpc: String,
     id: String,
     #[serde(flatten)]
-    method: Method,
+    method: Method<'se>,
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[allow(clippy::enum_variant_names)]
 #[serde(tag = "method")]
 #[serde(rename_all = "camelCase")]
-enum Method {
-    GetAccountInfo { params: Vec<GetAccountInfoParam> },
-    GetTokenLargestAccounts { params: Vec<String> },
-    GetAssetsByAuthority { params: GetAssetsByAuthorityParams },
+enum Method<'se> {
+    GetAccountInfo {
+        params: Vec<GetAccountInfoParam<'se>>,
+    },
+    GetTokenLargestAccounts {
+        params: Vec<String>,
+    },
+    GetAssetsByAuthority {
+        params: GetAssetsByAuthorityParams,
+    },
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
-enum GetAccountInfoParam {
-    Pubkey(String),
+enum GetAccountInfoParam<'se> {
+    Pubkey(&'se str),
     Encoding(Encoding),
 }
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct Encoding {
     encoding: String,
 }
 
-impl NodeCall {
+impl<'se> NodeCall<'se> {
     fn new(request: Method) -> NodeCall {
         NodeCall {
             jsonrpc: JSON_RPC.to_string(),
@@ -128,7 +134,7 @@ impl NodeCall {
         }
     }
 
-    pub(crate) fn get_account_info(address: String) -> Self {
+    pub(crate) fn get_account_info(address: &'se str) -> Self {
         Self::new(Method::GetAccountInfo {
             params: vec![
                 GetAccountInfoParam::Pubkey(address),
@@ -192,7 +198,7 @@ async fn get_account_info(client: &Client, pubkey: &str) -> Result<String> {
         pub data: Vec<String>,
     }
 
-    let json = NodeCall::get_account_info(pubkey.to_string());
+    let json = NodeCall::get_account_info(pubkey);
     let account_response: Response = client.post(&json).await?;
     Ok(account_response.value.data[0].clone())
 }
