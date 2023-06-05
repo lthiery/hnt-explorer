@@ -1,209 +1,62 @@
+use base64::Engine;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
+use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
+mod client;
 mod error;
+mod rpc_call;
+
+pub use client::Client;
 pub use error::Error;
+use rpc_call::RpcCall;
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
-/// The default timeout for API requests
-pub const DEFAULT_TIMEOUT: u64 = 120;
-/// JSON RPC version
-pub const JSON_RPC: &str = "2.0";
-
-#[derive(Clone, Debug)]
-pub struct Client {
-    base_url: String,
-    client: reqwest::Client,
-}
-
-impl Default for Client {
-    fn default() -> Self {
-        let url = std::env::var("SOL_RPC_ENDPOINT")
-            .unwrap_or("https://api.mainnet-beta.solana.com".to_string());
-        Self::new_with_base_url(url)
-    }
-}
-
-impl Client {
-    /// Create a new client using a given base URL and a default
-    /// timeout. The library will use absoluate paths based on this
-    /// base_url.
-    pub fn new_with_base_url(base_url: String) -> Self {
-        Self::new_with_timeout(base_url, DEFAULT_TIMEOUT)
-    }
-
-    /// Create a new client using a given base URL, and request
-    /// timeout value.  The library will use absoluate paths based on
-    /// the given base_url.
-    pub fn new_with_timeout(base_url: String, timeout: u64) -> Self {
-        let client = reqwest::Client::builder()
-            .gzip(true)
-            .timeout(Duration::from_secs(timeout))
-            .build()
-            .unwrap();
-        Self { base_url, client }
-    }
-
-    async fn post<T: DeserializeOwned, D: Serialize>(&self, data: D) -> Result<T> {
-        #[derive(Clone, Serialize, Deserialize, Debug)]
-        struct ErrorResponse {
-            code: isize,
-            message: String,
-        }
-
-        #[derive(Clone, Serialize, Deserialize, Debug)]
-        #[serde(untagged)]
-        #[serde(rename_all = "lowercase")]
-        enum Response<T> {
-            Result { result: T },
-            Error { error: ErrorResponse },
-        }
-
-        #[derive(Clone, Serialize, Deserialize, Debug)]
-        struct FullResponse<T> {
-            jsonrpc: String,
-            #[serde(flatten)]
-            response: Response<T>,
-            id: String,
-        }
-
-        #[derive(Serialize, Debug)]
-        pub struct AssetsByAuthorityResponse {
-            pub items: Vec<Item>,
-        }
-
-        #[derive(Serialize, Debug)]
-        pub struct Item {
-            pub id: String,
-        }
-
-        let request = self.client.post(&self.base_url).json(&data);
-        let response = request.send().await?;
-        let body = response.text().await?;
-        let v: FullResponse<T> = serde_json::from_str(&body)?;
-        match v.response {
-            Response::Result { result, .. } => Ok(result),
-            Response::Error {
-                error: ErrorResponse { code, message },
-            } => Err(error::Error::NodeError(message, code)),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub(crate) struct NodeCall<'se> {
-    jsonrpc: String,
-    id: String,
-    #[serde(flatten)]
-    method: Method<'se>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[allow(clippy::enum_variant_names)]
-#[serde(tag = "method")]
-#[serde(rename_all = "camelCase")]
-enum Method<'se> {
-    GetAccountInfo {
-        params: Vec<GetAccountInfoParam<'se>>,
-    },
-    GetTokenLargestAccounts {
-        params: Vec<String>,
-    },
-    GetAssetsByAuthority {
-        params: GetAssetsByAuthorityParams,
-    },
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(untagged)]
-enum GetAccountInfoParam<'se> {
-    Pubkey(&'se str),
-    Encoding(Encoding),
-}
-#[derive(Clone, Debug, Serialize)]
-struct Encoding {
-    encoding: String,
-}
-
-impl<'se> NodeCall<'se> {
-    fn new(request: Method) -> NodeCall {
-        NodeCall {
-            jsonrpc: JSON_RPC.to_string(),
-            id: now_millis(),
-            method: request,
-        }
-    }
-
-    pub(crate) fn get_account_info(address: Vec<&'se str>) -> Self {
-        let mut params = address.iter().map(|e| GetAccountInfoParam::Pubkey(e)).collect::<Vec<_>>();
-        params.push(GetAccountInfoParam::Encoding(Encoding {
-            encoding: "base64".to_string(),
-        }));
-        Self::new(Method::GetAccountInfo {
-            params
-        })
-    }
-
-    fn get_token_largest_accounts(pubkey: String) -> Self {
-        Self::new(Method::GetTokenLargestAccounts {
-            params: vec![pubkey],
-        })
-    }
-
-    fn get_assets_by_authority(authority_address: String) -> Self {
-        Self::new(Method::GetAssetsByAuthority {
-            params: GetAssetsByAuthorityParams {
-                authority_address,
-                page: 1,
-                limit: 100,
-            },
-        })
-    }
-}
-
-#[derive(Clone, Deserialize, Debug, Serialize)]
-struct GetAssetParams {
-    id: String,
-}
-
-#[derive(Clone, Deserialize, Debug, Serialize)]
-struct GetAccountInfoParams {
-    address: String,
-}
-
-#[derive(Clone, Deserialize, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct GetAssetsByAuthorityParams {
-    authority_address: String,
-    page: usize,
-    limit: usize,
-}
-
-fn now_millis() -> String {
-    let ms = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap();
-    ms.as_millis().to_string()
-}
-
-async fn get_account_info(client: &Client, pubkey: Vec<&str>) -> Result<String> {
+#[allow(unused)]
+async fn get_account_data(client: &Client, pubkey: &Pubkey) -> Result<Vec<u8>> {
     #[derive(Deserialize, Debug)]
     pub struct Response {
         pub value: Value,
     }
-
     #[derive(Deserialize, Debug)]
     pub struct Value {
         pub data: Vec<String>,
     }
 
-    let json = NodeCall::get_account_info(pubkey);
+    let json = RpcCall::get_account_info(pubkey);
     let account_response: Response = client.post(&json).await?;
-    Ok(account_response.value.data[0].clone())
+    Ok(base64::engine::general_purpose::STANDARD.decode(&account_response.value.data[0])?)
 }
 
-async fn get_token_largest_accounts(client: &Client, pubkey: &str) -> Result<String> {
+pub async fn get_multiple_accounts_data(
+    client: &Client,
+    pubkeys: Vec<&Pubkey>,
+) -> Result<Vec<Vec<u8>>> {
+    #[derive(Deserialize, Debug)]
+    pub struct Response {
+        pub value: Vec<Value>,
+    }
+    #[derive(Deserialize, Debug)]
+    pub struct Value {
+        pub data: Vec<String>,
+    }
+
+    let json = RpcCall::get_multiple_accounts(pubkeys);
+    let account_response: Response = client.post(&json).await?;
+    account_response
+        .value
+        .into_iter()
+        .map(|v| {
+            base64::engine::general_purpose::STANDARD
+                .decode(&v.data[0])
+                .map_err(Error::B64Decode)
+        })
+        .collect()
+}
+
+async fn get_token_largest_account(client: &Client, pubkey: &Pubkey) -> Result<Pubkey> {
     #[derive(Deserialize, Debug)]
     struct Response {
         pub value: Vec<Value>,
@@ -212,12 +65,13 @@ async fn get_token_largest_accounts(client: &Client, pubkey: &str) -> Result<Str
     struct Value {
         pub address: String,
     }
-    let json = NodeCall::get_token_largest_accounts(pubkey.to_string());
+
+    let json = RpcCall::get_token_largest_accounts(pubkey);
     let response: Response = client.post(&json).await?;
-    Ok(response.value[0].address.clone())
+    Ok(Pubkey::from_str(&response.value[0].address)?)
 }
 
-pub async fn get_assets_by_authority(client: &Client, authority: &str) -> Result<String> {
+pub async fn get_assets_by_authority(client: &Client, authority: &Pubkey) -> Result<Pubkey> {
     #[derive(Deserialize, Debug)]
     pub struct AssetsByAuthorityResponse {
         pub items: Vec<Item>,
@@ -227,23 +81,46 @@ pub async fn get_assets_by_authority(client: &Client, authority: &str) -> Result
     pub struct Item {
         pub id: String,
     }
-    let json = NodeCall::get_assets_by_authority(authority.to_string());
+    let json = RpcCall::get_assets_by_authority(authority);
     let asset_response: AssetsByAuthorityResponse = client.post(&json).await?;
-    Ok(asset_response.items[0].id.clone())
+    Ok(Pubkey::from_str(&asset_response.items[0].id)?)
 }
 
-pub async fn get_position_owner(
-    client: &Client,
-    position_id: &str,
-) -> Result<solana_sdk::pubkey::Pubkey> {
-    use base64::Engine;
+#[allow(unused)]
+pub async fn get_position_owner(client: &Client, position_id: &Pubkey) -> Result<Pubkey> {
     let asset_by_authority = get_assets_by_authority(client, position_id).await?;
-    let token_largest_accounts = get_token_largest_accounts(client, &asset_by_authority).await?;
-    let account_info = get_account_info(client, vec![&token_largest_accounts]).await?;
-    let data = base64::engine::general_purpose::STANDARD
-        .decode(account_info)
-        .unwrap();
-    Ok(solana_sdk::pubkey::Pubkey::new(&data[32..64]))
+    let token_largest_accounts = get_token_largest_account(client, &asset_by_authority).await?;
+    let account_data = get_account_data(client, &token_largest_accounts).await?;
+    Ok(Pubkey::new(&account_data[32..64]))
+}
+
+pub async fn get_positions_owner(
+    client: &Client,
+    position_id: &Vec<&Pubkey>,
+    chunk_size: usize,
+) -> Result<Vec<Pubkey>> {
+    use futures::future::join_all;
+    let mut owners = Vec::with_capacity(position_id.len());
+    for i in position_id.chunks(chunk_size) {
+        let mut futures = Vec::with_capacity(chunk_size);
+        for j in i {
+            futures.push(async move {
+                let asset_by_authority = get_assets_by_authority(client, j).await.unwrap();
+                get_token_largest_account(client, &asset_by_authority)
+                    .await
+                    .unwrap()
+            });
+        }
+        let token_accounts = join_all(futures).await;
+        let account_data =
+            get_multiple_accounts_data(client, token_accounts.iter().collect()).await?;
+        let these_owners = account_data
+            .into_iter()
+            .map(|v| Pubkey::new(&v[32..64]))
+            .collect::<Vec<Pubkey>>();
+        owners.extend(&these_owners)
+    }
+    Ok(owners)
 }
 
 #[cfg(test)]
@@ -255,57 +132,109 @@ mod test {
     #[test]
     async fn test_get_assets_by_authority() {
         let client = Client::default();
-        let asset_by_authority =
-            get_assets_by_authority(&client, "E6ELFUZMahhCgsPCeEYXtQT51Yq24Yg4WAhmQJBsGxhg")
-                .await
-                .unwrap();
+        let asset_by_authority = get_assets_by_authority(
+            &client,
+            &Pubkey::from_str("EvXrmwTJaqXvAL5skuyiWRV1X7MPwmZYX8Qp3DCw83RT").unwrap(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             asset_by_authority,
-            "BLt9DipvNYvCddekZn4MuvDwxziuda6wR2Buk3hAbJwF"
+            Pubkey::from_str("BQW1ABLREJtw8hA3WqpvfvUZppVWaG127hAoVsNnmNKS").unwrap()
         )
     }
 
     #[test]
     async fn test_get_token_largest_accounts() {
         let client = Client::default();
-        let token_largest_accounts =
-            get_token_largest_accounts(&client, "BLt9DipvNYvCddekZn4MuvDwxziuda6wR2Buk3hAbJwF")
-                .await
-                .unwrap();
+        let token_largest_accounts = get_token_largest_account(
+            &client,
+            &Pubkey::from_str("BLt9DipvNYvCddekZn4MuvDwxziuda6wR2Buk3hAbJwF").unwrap(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             token_largest_accounts,
-            "CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ"
+            Pubkey::from_str("CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ").unwrap()
         )
     }
 
     #[test]
-    async fn test_get_account_info() {
-        use base64::Engine;
+    async fn test_get_account_data() {
         let client = Client::default();
-        let get_asset = get_account_info(&client, vec!["CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ"])
-            .await
-            .unwrap();
-        let data = base64::engine::general_purpose::STANDARD
-            .decode(&get_asset)
-            .unwrap();
-        let pubkey = solana_sdk::pubkey::Pubkey::new(&data[32..64]);
+        let data = get_account_data(
+            &client,
+            &Pubkey::from_str("CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ").unwrap(),
+        )
+        .await
+        .unwrap();
+        let pubkey = Pubkey::new(&data[32..64]);
         assert_eq!(
             pubkey,
-            solana_sdk::pubkey::Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU")
-                .unwrap()
+            Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
         )
+    }
+
+    #[test]
+    async fn test_get_multiple_accounts() {
+        let client = Client::default();
+        let data = get_multiple_accounts_data(
+            &client,
+            vec![
+                &Pubkey::from_str("CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ").unwrap(),
+                &Pubkey::from_str("GxXXdsdfT4Z7ntYphmBdLRTBTLHPu2cdtCEDK56uGK28").unwrap(),
+            ],
+        )
+        .await
+        .unwrap();
+        let pubkey = Pubkey::new(&data[0][32..64]);
+        assert_eq!(
+            pubkey,
+            Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
+        );
+        let pubkey = Pubkey::new(&data[1][32..64]);
+        assert_eq!(
+            pubkey,
+            solana_sdk::pubkey::Pubkey::from_str("CCUWF8sALfvVtv1EvKwuM4p7ZgUWvsrKVzQfFGmBz6pa")
+                .unwrap()
+        );
     }
 
     #[test]
     async fn test_get_position_owner() {
         let client = Client::default();
-        let pubkey = get_position_owner(&client, "E6ELFUZMahhCgsPCeEYXtQT51Yq24Yg4WAhmQJBsGxhg")
-            .await
-            .unwrap();
+        let pubkey = get_position_owner(
+            &client,
+            &Pubkey::from_str("E6ELFUZMahhCgsPCeEYXtQT51Yq24Yg4WAhmQJBsGxhg").unwrap(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             pubkey,
-            solana_sdk::pubkey::Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU")
-                .unwrap()
+            Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
         )
+    }
+
+    #[test]
+    async fn test_get_positions_owner() {
+        let client = Client::default();
+        let pubkeys = get_positions_owner(
+            &client,
+            &vec![
+                &Pubkey::from_str("E6ELFUZMahhCgsPCeEYXtQT51Yq24Yg4WAhmQJBsGxhg").unwrap(),
+                &Pubkey::from_str("3NW4DzSNeS72pJXCpAszC6r4Su1Ku6RHEDwRmzVXMVxo").unwrap(),
+            ],
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            pubkeys[0],
+            Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
+        );
+        assert_eq!(
+            pubkeys[1],
+            Pubkey::from_str("BKw4D8sv6Wt67LmUqVN1gLpe2XUDicifdrSBuGcYvPz2").unwrap()
+        );
     }
 }
