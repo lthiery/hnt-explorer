@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime};
 
 mod error;
 pub use error::Error;
+
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
 /// The default timeout for API requests
@@ -134,14 +135,13 @@ impl<'se> NodeCall<'se> {
         }
     }
 
-    pub(crate) fn get_account_info(address: &'se str) -> Self {
+    pub(crate) fn get_account_info(address: Vec<&'se str>) -> Self {
+        let mut params = address.iter().map(|e| GetAccountInfoParam::Pubkey(e)).collect::<Vec<_>>();
+        params.push(GetAccountInfoParam::Encoding(Encoding {
+            encoding: "base64".to_string(),
+        }));
         Self::new(Method::GetAccountInfo {
-            params: vec![
-                GetAccountInfoParam::Pubkey(address),
-                GetAccountInfoParam::Encoding(Encoding {
-                    encoding: "base64".to_string(),
-                }),
-            ],
+            params
         })
     }
 
@@ -187,7 +187,7 @@ fn now_millis() -> String {
     ms.as_millis().to_string()
 }
 
-async fn get_account_info(client: &Client, pubkey: &str) -> Result<String> {
+async fn get_account_info(client: &Client, pubkey: Vec<&str>) -> Result<String> {
     #[derive(Deserialize, Debug)]
     pub struct Response {
         pub value: Value,
@@ -239,7 +239,7 @@ pub async fn get_position_owner(
     use base64::Engine;
     let asset_by_authority = get_assets_by_authority(client, position_id).await?;
     let token_largest_accounts = get_token_largest_accounts(client, &asset_by_authority).await?;
-    let account_info = get_account_info(client, &token_largest_accounts).await?;
+    let account_info = get_account_info(client, vec![&token_largest_accounts]).await?;
     let data = base64::engine::general_purpose::STANDARD
         .decode(account_info)
         .unwrap();
@@ -282,7 +282,7 @@ mod test {
     async fn test_get_account_info() {
         use base64::Engine;
         let client = Client::default();
-        let get_asset = get_account_info(&client, "CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ")
+        let get_asset = get_account_info(&client, vec!["CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ"])
             .await
             .unwrap();
         let data = base64::engine::general_purpose::STANDARD
