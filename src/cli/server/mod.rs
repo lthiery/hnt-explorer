@@ -36,7 +36,7 @@ impl Server {
         let epoch_info_memory = epoch_info::Memory::new(&rpc_client).await?;
         let epoch_info_memory = Arc::new(Mutex::new(epoch_info_memory));
         println!("epoch_info data intialized...");
-        let (positions_memory, position_owner_map ) =
+        let (positions_memory, position_owner_map) =
             positions::Memory::new(&rpc_client, epoch_info_memory.clone()).await?;
         let positions_memory = Arc::new(Mutex::new(positions_memory));
         println!("positions_memory data initialized!");

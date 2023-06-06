@@ -14,8 +14,9 @@ use tokio::{fs::File, io::AsyncReadExt};
 #[derive(Debug)]
 pub struct Memory {
     data: HashMap<i64, Arc<positions::PositionData>>,
-    position: HashMap<Pubkey, positions::Position>,
+    pub position: HashMap<Pubkey, positions::Position>,
     pub latest_data: Arc<positions::PositionData>,
+    pub positions_by_owner: HashMap<Pubkey, Vec<Pubkey>>,
 }
 
 impl Memory {
@@ -32,7 +33,9 @@ impl Memory {
         epoch_memory: Arc<Mutex<epoch_info::Memory>>,
     ) -> Result<(Memory, HashMap<Pubkey, Pubkey>)> {
         let mut position_owner_map = HashMap::new();
-        let latest_data = Arc::new(Self::pull_latest_data(rpc_client, epoch_memory, &mut position_owner_map).await?);
+        let latest_data = Arc::new(
+            Self::pull_latest_data(rpc_client, epoch_memory, &mut position_owner_map).await?,
+        );
         let mut data = HashMap::new();
         data.insert(latest_data.timestamp, latest_data.clone());
 
@@ -42,10 +45,22 @@ impl Memory {
             .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
             .collect();
 
+        let mut positions_by_owner: HashMap<Pubkey, Vec<Pubkey>> = HashMap::new();
+        for position in latest_data.positions.iter() {
+            let owner = Pubkey::from_str(&position.owner)?;
+            let position = Pubkey::from_str(&position.position_key)?;
+            if let Some(entry) = positions_by_owner.get_mut(&owner) {
+                entry.push(position);
+            } else {
+                positions_by_owner.insert(owner, vec![position]);
+            }
+        }
+
         let memory = Memory {
             data,
             latest_data,
             position,
+            positions_by_owner,
         };
 
         memory.write_latest_to_csv()?;
@@ -122,13 +137,14 @@ impl Memory {
     async fn pull_latest_data(
         rpc_client: &Arc<RpcClient>,
         epoch_summaries: Arc<Mutex<epoch_info::Memory>>,
-        position_owner_map: &mut HashMap<Pubkey, Pubkey>
+        position_owner_map: &mut HashMap<Pubkey, Pubkey>,
     ) -> Result<positions::PositionData> {
         let epoch_summaries = {
             let lock = epoch_summaries.lock().await;
             lock.latest_data.clone()
         };
-        let mut latest_data = positions::get_data(rpc_client, epoch_summaries, position_owner_map).await?;
+        let mut latest_data =
+            positions::get_data(rpc_client, epoch_summaries, position_owner_map).await?;
         latest_data.scale_down();
         Ok(latest_data)
     }
@@ -362,14 +378,21 @@ pub async fn get_positions(
     rpc_client: Arc<RpcClient>,
     memory: Arc<Mutex<Memory>>,
     epoch_memory: Arc<Mutex<epoch_info::Memory>>,
-    mut position_owner_map: HashMap<Pubkey, Pubkey>
+    mut position_owner_map: HashMap<Pubkey, Pubkey>,
 ) -> Result {
     loop {
         time::sleep(time::Duration::from_secs(60 * 5)).await;
         println!("Pulling latest data");
-        let mut latest_data = Memory::pull_latest_data(&rpc_client, epoch_memory.clone(), &mut position_owner_map).await;
+        let mut latest_data =
+            Memory::pull_latest_data(&rpc_client, epoch_memory.clone(), &mut position_owner_map)
+                .await;
         while latest_data.is_err() {
-            latest_data = Memory::pull_latest_data(&rpc_client, epoch_memory.clone(), &mut position_owner_map).await;
+            latest_data = Memory::pull_latest_data(
+                &rpc_client,
+                epoch_memory.clone(),
+                &mut position_owner_map,
+            )
+            .await;
         }
         {
             let mut memory = memory.lock().await;
