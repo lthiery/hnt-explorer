@@ -66,7 +66,7 @@ impl From<accounts::Balance> for HntBalance {
 }
 pub async fn get_account(
     Extension(rpc_client): Extension<Arc<RpcClient>>,
-    Extension(positions): Extension<Arc<Mutex<positions::Memory>>>,
+    Extension(positions): Extension<Arc<Mutex<Option<positions::Memory>>>>,
     Path(account): Path<String>,
 ) -> HandlerResult {
     if let Ok(pubkey) = Pubkey::from_str(&account) {
@@ -78,6 +78,14 @@ pub async fn get_account(
             Ok(balances) => {
                 let mut balances = Balances::from(balances);
                 let positions = positions.lock().await;
+                if positions.is_none() {
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Data not initialized".to_string(),
+                    ));
+                }
+                let positions = positions.as_ref().unwrap();
+
                 if let Some(owned_positions) = positions.positions_by_owner.get(&pubkey) {
                     let mut list_of_positions = Vec::new();
                     for p in owned_positions {

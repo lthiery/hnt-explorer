@@ -8,6 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use solana_sdk::pubkey::Pubkey;
+use std::ops::DerefMut;
 use std::str::FromStr;
 use tokio::{fs::File, io::AsyncReadExt};
 
@@ -20,19 +21,6 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub fn empty() -> Self {
-        Self {
-            data: HashMap::new(),
-            position: HashMap::new(),
-            latest_data: Arc::new(positions::PositionData::new()),
-            positions_by_owner: HashMap::new(),
-        }
-    }
-
-    fn uninitialized(&self) -> bool {
-        self.data.is_empty()
-    }
-
     fn latest_delegated_positions_file(&self) -> String {
         format!("./delegated_positions_{}.csv", self.latest_data.timestamp)
     }
@@ -43,42 +31,16 @@ impl Memory {
 
     #[allow(unused)]
     pub async fn new(
-        rpc_client: &Arc<RpcClient>,
-        epoch_memory: Arc<Mutex<epoch_info::Memory>>,
-    ) -> Result<(Memory, HashMap<Pubkey, Pubkey>)> {
-        let mut position_owner_map = HashMap::new();
-        let latest_data = Arc::new(
-            Self::pull_latest_data(rpc_client, epoch_memory, &mut position_owner_map).await?,
-        );
-        let mut data = HashMap::new();
-        data.insert(latest_data.timestamp, latest_data.clone());
-
-        let position = latest_data
-            .positions
-            .iter()
-            .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
-            .collect();
-
-        let mut positions_by_owner: HashMap<Pubkey, Vec<Pubkey>> = HashMap::new();
-        for position in latest_data.positions.iter() {
-            let owner = Pubkey::from_str(&position.owner)?;
-            let position = Pubkey::from_str(&position.position_key)?;
-            if let Some(entry) = positions_by_owner.get_mut(&owner) {
-                entry.push(position);
-            } else {
-                positions_by_owner.insert(owner, vec![position]);
-            }
-        }
-
-        let memory = Memory {
-            data,
-            latest_data,
-            position,
-            positions_by_owner,
+        latest_data: positions::PositionData
+    ) -> Result<Memory> {
+        let mut memory = Self {
+            data: HashMap::new(),
+            position: HashMap::new(),
+            latest_data: Arc::new(positions::PositionData::new()),
+            positions_by_owner: HashMap::new(),
         };
-
-        memory.write_latest_to_csv()?;
-        Ok((memory, position_owner_map))
+        memory.update_data(latest_data).await?;
+        Ok(memory)
     }
 
     async fn remove_csv(&self, path: String) -> Result {
@@ -170,13 +132,14 @@ impl Memory {
         let latest_data = Arc::new(latest_data);
         self.latest_data = latest_data.clone();
 
-        // organize into positions
+        // organize into map of positions pubkey to full position data
         self.position = latest_data
             .positions
             .iter()
             .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
             .collect();
 
+        // organize into map of owner pubkey to [position pubkey]
         let mut positions_by_owner: HashMap<Pubkey, Vec<Pubkey>> = HashMap::new();
         for position in latest_data.positions.iter() {
             let owner = Pubkey::from_str(&position.owner)?;
@@ -189,7 +152,7 @@ impl Memory {
         }
         self.positions_by_owner = positions_by_owner;
 
-        // start a new Hashmap
+        // start a new Hashmap of all cached positions
         let mut data = HashMap::new();
         data.insert(latest_data.timestamp, latest_data.clone());
 
@@ -228,19 +191,20 @@ pub struct DelegatedData {
 }
 
 pub async fn delegated_stakes(
-    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
     query: Query<QueryParams>,
 ) -> HandlerResult {
     const DEFAULT_LIMIT: usize = 500;
     let query = query.0;
     let data = {
         let memory = memory.lock().await;
-        if memory.uninitialized() {
+        if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Data not initialized".to_string(),
             ));
         }
+        let memory = memory.as_ref().unwrap();
         if let Some(timestamp) = query.timestamp {
             if let Some(data) = memory.data.get(&timestamp) {
                 Ok(data.clone())
@@ -292,19 +256,20 @@ pub async fn delegated_stakes(
 }
 
 pub async fn positions(
-    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
     query: Query<QueryParams>,
 ) -> HandlerResult {
     const DEFAULT_LIMIT: usize = 500;
     let query = query.0;
     let data = {
         let memory = memory.lock().await;
-        if memory.uninitialized() {
+        if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Data not initialized".to_string(),
             ));
         }
+        let memory = memory.as_ref().unwrap();
         if let Some(timestamp) = query.timestamp {
             if let Some(data) = memory.data.get(&timestamp) {
                 Ok(data.clone())
@@ -331,9 +296,12 @@ pub async fn positions(
     }
 
     let max_data = data.positions.len() - start;
+    println!("max_data: {}", max_data);
     let limit = query.limit.map_or(DEFAULT_LIMIT, |limit| {
         limit.min(DEFAULT_LIMIT).min(max_data)
     });
+    println!("limit: {}", limit);
+    println!("start: {}", start);
 
     let mut positions = Vec::with_capacity(limit);
     positions.resize(limit, positions::Position::default());
@@ -349,17 +317,18 @@ pub async fn positions(
 }
 
 pub async fn position(
-    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
     Path(position): Path<String>,
 ) -> HandlerResult {
     if let Ok(pubkey) = Pubkey::from_str(&position) {
         let memory = memory.lock().await;
-        if memory.uninitialized() {
+        if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Data not initialized".to_string(),
             ));
         }
+        let memory = memory.as_ref().unwrap();
         if let Some(position) = memory.position.get(&pubkey) {
             Ok(response::Json(json!(position)))
         } else {
@@ -382,19 +351,20 @@ pub struct QueryParamsMetadata {
 }
 
 pub async fn positions_metadata(
-    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
     query: Query<QueryParamsMetadata>,
 ) -> HandlerResult {
     const DEFAULT_LIMIT: usize = 500;
     let query = query.0;
     let data = {
         let memory = memory.lock().await;
-        if memory.uninitialized() {
+        if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Data not initialized".to_string(),
             ));
         }
+        let memory = memory.as_ref().unwrap();
         if let Some(timestamp) = query.timestamp {
             if let Some(data) = memory.data.get(&timestamp) {
                 Ok(data.clone())
@@ -431,7 +401,7 @@ pub struct Metadata {
 
 pub async fn get_positions(
     rpc_client: Arc<RpcClient>,
-    memory: Arc<Mutex<Memory>>,
+    memory: Arc<Mutex<Option<Memory>>>,
     epoch_memory: Arc<Mutex<epoch_info::Memory>>,
 ) -> Result {
     let mut position_owner_map = HashMap::new();
@@ -457,25 +427,36 @@ pub async fn get_positions(
             )
             .await;
         }
-        // acquire the lock and set the memory
-        let mut memory = memory.lock().await;
-        memory.update_data(latest_data.unwrap()).await?;
-        drop(memory);
-        // drop the memory before sleeping
-        time::sleep(time::Duration::from_secs(60 * 5)).await;
+        //safe to unwrap because of result check above
+        let latest_data = latest_data.unwrap();
+        {
+            // acquire the lock and set the memory
+            let mut memory = memory.lock().await;
+            match memory.deref_mut() {
+                None => {
+                    *memory = Some(Memory::new(latest_data).await?);
+                }
+
+                Some(ref mut memory) => {
+                    memory.update_data(latest_data).await?;
+                }
+            }
+        }
+        time::sleep(time::Duration::from_secs(60*5)).await;
     }
 }
 
 pub async fn server_latest_delegated_positions_as_csv(
-    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
 ) -> impl IntoResponse {
-    let memory = memory.lock().await;
-    if memory.uninitialized() {
+    let memory_mutex = memory.lock().await;
+    if memory_mutex.is_none() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             "Data not initialized".to_string(),
         ));
     }
+    let memory = memory_mutex.as_ref().unwrap();
     let latest_file = memory.latest_delegated_positions_file();
     let mime_type = mime_guess::from_path(&latest_file).first_or_text_plain();
 
@@ -492,7 +473,7 @@ pub async fn server_latest_delegated_positions_as_csv(
                     .body(body::boxed(Empty::new()))
                     .unwrap()),
                 Ok(_) => {
-                    drop(memory);
+                    drop(memory_mutex);
                     Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(
@@ -515,15 +496,16 @@ pub async fn server_latest_delegated_positions_as_csv(
 }
 
 pub async fn server_latest_positions_as_csv(
-    Extension(memory): Extension<Arc<Mutex<Memory>>>,
+    Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
 ) -> impl IntoResponse {
-    let memory = memory.lock().await;
-    if memory.uninitialized() {
+    let memory_mutex = memory.lock().await;
+    if memory_mutex.is_none() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             "Data not initialized".to_string(),
         ));
     }
+    let memory = memory_mutex.as_ref().unwrap();
     let latest_file = memory.latest_positions_file();
     let mime_type = mime_guess::from_path(&latest_file).first_or_text_plain();
 
@@ -540,7 +522,7 @@ pub async fn server_latest_positions_as_csv(
                     .body(body::boxed(Empty::new()))
                     .unwrap()),
                 Ok(_) => {
-                    drop(memory);
+                    drop(memory_mutex);
                     Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(

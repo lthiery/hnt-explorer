@@ -36,7 +36,9 @@ impl Server {
         let epoch_info_memory = epoch_info::Memory::new(&rpc_client).await?;
         let epoch_info_memory = Arc::new(Mutex::new(epoch_info_memory));
         println!("epoch_info data intialized...");
-        let positions_memory = Arc::new(Mutex::new(positions::Memory::empty()));
+        // Initializing positions can take up to 3 minutes and not binding to the port upsets heroku
+        // Therefore, we use an Option<positions::Memory> and it gets initialized after server is up
+        let positions_memory = Arc::new(Mutex::new(None));
         println!("positions_memory initialized as empty...");
         println!("Server initialized!");
 
@@ -67,8 +69,6 @@ impl Server {
         let server_endpoint = std::env::var("PORT").unwrap_or("3000".to_string());
         println!("Binding to port {}...", server_endpoint);
         let addr = std::net::SocketAddr::from(([0, 0, 0, 0], server_endpoint.parse().unwrap()));
-
-        // run it with hyper on localhost:3000
         tokio::select!(
             result = positions::get_positions(rpc_client.clone(), positions_memory,
                 epoch_info_memory.clone()) => result,
