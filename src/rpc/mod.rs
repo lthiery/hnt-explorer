@@ -94,7 +94,7 @@ pub async fn get_position_owner(client: &Client, position_id: &Pubkey) -> Result
     Ok(Pubkey::new(&account_data[32..64]))
 }
 
-pub async fn get_positions_owner(
+pub async fn get_all_position_owners(
     client: &Client,
     position_id: &Vec<&Pubkey>,
     chunk_size: usize,
@@ -216,9 +216,9 @@ mod test {
     }
 
     #[test]
-    async fn test_get_positions_owner() {
+    async fn get_all_position_owners() {
         let client = Client::default();
-        let pubkeys = get_positions_owner(
+        let pubkeys = get_all_position_owners(
             &client,
             &vec![
                 &Pubkey::from_str("E6ELFUZMahhCgsPCeEYXtQT51Yq24Yg4WAhmQJBsGxhg").unwrap(),

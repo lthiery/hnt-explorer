@@ -151,6 +151,7 @@ impl PositionData {
 pub async fn get_data(
     rpc_client: &RpcClient,
     epoch_info: Arc<Vec<epoch_info::EpochSummary>>,
+    position_owners_map: &mut HashMap<Pubkey, Pubkey>,
 ) -> Result<PositionData> {
     let mut d = PositionData::new();
     let positions_data = locked::get_data(rpc_client).await?;
@@ -160,18 +161,30 @@ pub async fn get_data(
     let mut positions_raw = HashMap::new();
     let mut positions = HashMap::new();
 
-    let client = rpc::Client::default();
-    let position_keys = positions_data.positions.iter().map(|p| &p.0).collect();
-    let position_owners = rpc::get_positions_owner(&client, &position_keys, 100).await?;
+    // if the map is empty, we assume it hasn't been initialized and so we initialize it
+    if position_owners_map.is_empty() {
+        let client = rpc::Client::default();
+        let position_keys = positions_data.positions.iter().map(|p| &p.0).collect();
+        let owners = rpc::get_all_position_owners(&client, &position_keys, 100).await?;
+        positions_data.positions.iter().zip(owners.iter()).for_each(|(p, k)| {
+            position_owners_map.insert(p.0, *k);
+        });
+    }
 
-    for ((pubkey, position), owner) in positions_data
-        .positions
-        .into_iter()
-        .zip(position_owners.into_iter())
-    {
+
+    for (pubkey, position) in positions_data.positions.into_iter() {
         if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
             if mint.to_string().as_str() == HNT_MINT {
                 positions_raw.insert(pubkey, position.clone());
+                let owner = match position_owners_map.get(&pubkey) {
+                    Some(owner) => *owner,
+                    None => {
+                        let client = rpc::Client::default();
+                        let owner = rpc::get_position_owner(&client, &pubkey).await?;
+                        position_owners_map.insert(pubkey, owner);
+                        owner
+                    }
+                };
                 let position = Position::try_from_positionv0(
                     owner,
                     pubkey,
@@ -325,7 +338,7 @@ fn get_stats(
 impl Positions {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
         let epoch_summaries = epoch_info::get_epoch_summaries(&rpc_client).await?;
-        let d = get_data(&rpc_client, epoch_summaries.into()).await?;
+        let d= get_data(&rpc_client, epoch_summaries.into(), &mut HashMap::new()).await?;
         if self.verify {
             let iot_sub_dao_raw = rpc_client
                 .get_account(&Pubkey::from_str(IOT_SUBDAO).unwrap())
