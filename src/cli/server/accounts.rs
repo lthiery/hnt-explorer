@@ -89,6 +89,7 @@ pub async fn get_account(
                             }
                             Some(p) => {
                                 balances.hnt.locked_amount += p.hnt_amount;
+                                balances.hnt.total_amount += p.hnt_amount;
                                 if let Some(delegated) = &p.delegated {
                                     match delegated.sub_dao {
                                         SubDao::Iot => {
