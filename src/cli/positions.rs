@@ -132,7 +132,7 @@ impl Data {
 }
 
 impl PositionData {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let curr_ts = Utc::now().timestamp();
         Self {
             timestamp: curr_ts,

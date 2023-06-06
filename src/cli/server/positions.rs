@@ -20,6 +20,19 @@ pub struct Memory {
 }
 
 impl Memory {
+    pub fn empty() -> Self {
+        Self {
+            data: HashMap::new(),
+            position: HashMap::new(),
+            latest_data: Arc::new(positions::PositionData::new()),
+            positions_by_owner: HashMap::new(),
+        }
+    }
+
+    fn uninitialized(&self) -> bool {
+        self.data.is_empty()
+    }
+
     fn latest_delegated_positions_file(&self) -> String {
         format!("./delegated_positions_{}.csv", self.latest_data.timestamp)
     }
@@ -28,6 +41,7 @@ impl Memory {
         format!("./positions_{}.csv", self.latest_data.timestamp)
     }
 
+    #[allow(unused)]
     pub async fn new(
         rpc_client: &Arc<RpcClient>,
         epoch_memory: Arc<Mutex<epoch_info::Memory>>,
@@ -204,6 +218,12 @@ pub async fn delegated_stakes(
     let query = query.0;
     let data = {
         let memory = memory.lock().await;
+        if memory.uninitialized() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Data not initialized".to_string(),
+            ));
+        }
         if let Some(timestamp) = query.timestamp {
             if let Some(data) = memory.data.get(&timestamp) {
                 Ok(data.clone())
@@ -262,6 +282,12 @@ pub async fn positions(
     let query = query.0;
     let data = {
         let memory = memory.lock().await;
+        if memory.uninitialized() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Data not initialized".to_string(),
+            ));
+        }
         if let Some(timestamp) = query.timestamp {
             if let Some(data) = memory.data.get(&timestamp) {
                 Ok(data.clone())
@@ -311,6 +337,12 @@ pub async fn position(
 ) -> HandlerResult {
     if let Ok(pubkey) = Pubkey::from_str(&position) {
         let memory = memory.lock().await;
+        if memory.uninitialized() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Data not initialized".to_string(),
+            ));
+        }
         if let Some(position) = memory.position.get(&pubkey) {
             Ok(response::Json(json!(position)))
         } else {
@@ -340,6 +372,12 @@ pub async fn positions_metadata(
     let query = query.0;
     let data = {
         let memory = memory.lock().await;
+        if memory.uninitialized() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Data not initialized".to_string(),
+            ));
+        }
         if let Some(timestamp) = query.timestamp {
             if let Some(data) = memory.data.get(&timestamp) {
                 Ok(data.clone())
@@ -378,10 +416,9 @@ pub async fn get_positions(
     rpc_client: Arc<RpcClient>,
     memory: Arc<Mutex<Memory>>,
     epoch_memory: Arc<Mutex<epoch_info::Memory>>,
-    mut position_owner_map: HashMap<Pubkey, Pubkey>,
 ) -> Result {
     loop {
-        time::sleep(time::Duration::from_secs(60 * 5)).await;
+        let mut position_owner_map = HashMap::new();
         println!("Pulling latest data");
         let mut latest_data =
             Memory::pull_latest_data(&rpc_client, epoch_memory.clone(), &mut position_owner_map)
@@ -398,6 +435,7 @@ pub async fn get_positions(
             let mut memory = memory.lock().await;
             memory.update_data(latest_data.unwrap()).await?;
         }
+        time::sleep(time::Duration::from_secs(60 * 5)).await;
     }
 }
 
@@ -405,24 +443,30 @@ pub async fn server_latest_delegated_positions_as_csv(
     Extension(memory): Extension<Arc<Mutex<Memory>>>,
 ) -> impl IntoResponse {
     let memory = memory.lock().await;
+    if memory.uninitialized() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Data not initialized".to_string(),
+        ));
+    }
     let latest_file = memory.latest_delegated_positions_file();
     let mime_type = mime_guess::from_path(&latest_file).first_or_text_plain();
 
     match File::open(&latest_file).await {
-        Err(_) => Response::builder()
+        Err(_) => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(body::boxed(Empty::new()))
-            .unwrap(),
+            .unwrap()),
         Ok(mut file) => {
             let mut contents = vec![];
             match file.read_to_end(&mut contents).await {
-                Err(_) => Response::builder()
+                Err(_) => Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
                     .body(body::boxed(Empty::new()))
-                    .unwrap(),
+                    .unwrap()),
                 Ok(_) => {
                     drop(memory);
-                    Response::builder()
+                    Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(
                             header::CONTENT_TYPE,
@@ -436,7 +480,7 @@ pub async fn server_latest_delegated_positions_as_csv(
                             .unwrap(),
                         )
                         .body(body::boxed(Full::from(contents)))
-                        .unwrap()
+                        .unwrap())
                 }
             }
         }
@@ -447,24 +491,30 @@ pub async fn server_latest_positions_as_csv(
     Extension(memory): Extension<Arc<Mutex<Memory>>>,
 ) -> impl IntoResponse {
     let memory = memory.lock().await;
+    if memory.uninitialized() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Data not initialized".to_string(),
+        ));
+    }
     let latest_file = memory.latest_positions_file();
     let mime_type = mime_guess::from_path(&latest_file).first_or_text_plain();
 
     match File::open(&latest_file).await {
-        Err(_) => Response::builder()
+        Err(_) => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(body::boxed(Empty::new()))
-            .unwrap(),
+            .unwrap()),
         Ok(mut file) => {
             let mut contents = vec![];
             match file.read_to_end(&mut contents).await {
-                Err(_) => Response::builder()
+                Err(_) => Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
                     .body(body::boxed(Empty::new()))
-                    .unwrap(),
+                    .unwrap()),
                 Ok(_) => {
                     drop(memory);
-                    Response::builder()
+                    Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(
                             header::CONTENT_TYPE,
@@ -478,7 +528,7 @@ pub async fn server_latest_positions_as_csv(
                             .unwrap(),
                         )
                         .body(body::boxed(Full::from(contents)))
-                        .unwrap()
+                        .unwrap())
                 }
             }
         }

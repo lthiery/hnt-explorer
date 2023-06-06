@@ -138,7 +138,7 @@ pub async fn get_all_position_owners(
 }
 
 // TODO: get CI to run these tests
-//#[cfg(test)]
+#[cfg(local_test)]
 mod test {
     use super::*;
     use std::str::FromStr;
