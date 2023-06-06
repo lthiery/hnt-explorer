@@ -177,6 +177,18 @@ impl Memory {
             .map(|p| (Pubkey::from_str(&p.position_key).unwrap(), p.clone()))
             .collect();
 
+        let mut positions_by_owner: HashMap<Pubkey, Vec<Pubkey>> = HashMap::new();
+        for position in latest_data.positions.iter() {
+            let owner = Pubkey::from_str(&position.owner)?;
+            let position = Pubkey::from_str(&position.position_key)?;
+            if let Some(entry) = positions_by_owner.get_mut(&owner) {
+                entry.push(position);
+            } else {
+                positions_by_owner.insert(owner, vec![position]);
+            }
+        }
+        self.positions_by_owner = positions_by_owner;
+
         // start a new Hashmap
         let mut data = HashMap::new();
         data.insert(latest_data.timestamp, latest_data.clone());
@@ -188,10 +200,15 @@ impl Memory {
                 data.insert(*key, value.clone());
             }
         }
-        println!("History contains {} entries", data.len());
+        println!(" History contains {} entries", data.len());
         self.data = data;
         self.write_latest_to_csv()?;
-        self.remove_csv(previous_file).await?;
+        if let Err(e) = self.remove_csv(previous_file).await {
+            println!(
+                "Failed to remove previous csv: {}. This is expected at first boot.",
+                e
+            );
+        }
         Ok(())
     }
 }
@@ -417,12 +434,13 @@ pub async fn get_positions(
     memory: Arc<Mutex<Memory>>,
     epoch_memory: Arc<Mutex<epoch_info::Memory>>,
 ) -> Result {
+    let mut position_owner_map = HashMap::new();
     loop {
-        let mut position_owner_map = HashMap::new();
         println!("Pulling latest data");
         let mut latest_data =
             Memory::pull_latest_data(&rpc_client, epoch_memory.clone(), &mut position_owner_map)
                 .await;
+        // if the first pull fails, keep trying until it succeeds
         while latest_data.is_err() {
             latest_data = Memory::pull_latest_data(
                 &rpc_client,
@@ -432,9 +450,18 @@ pub async fn get_positions(
             .await;
         }
         {
-            let mut memory = memory.lock().await;
-            memory.update_data(latest_data.unwrap()).await?;
+            latest_data = Memory::pull_latest_data(
+                &rpc_client,
+                epoch_memory.clone(),
+                &mut position_owner_map,
+            )
+            .await;
         }
+        // acquire the lock and set the memory
+        let mut memory = memory.lock().await;
+        memory.update_data(latest_data.unwrap()).await?;
+        drop(memory);
+        // drop the memory before sleeping
         time::sleep(time::Duration::from_secs(60 * 5)).await;
     }
 }

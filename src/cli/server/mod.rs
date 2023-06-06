@@ -37,7 +37,7 @@ impl Server {
         let epoch_info_memory = Arc::new(Mutex::new(epoch_info_memory));
         println!("epoch_info data intialized...");
         let positions_memory = Arc::new(Mutex::new(positions::Memory::empty()));
-        println!("positions_memory initialized a empty...");
+        println!("positions_memory initialized as empty...");
         println!("Server initialized!");
 
         // build our application with a route
