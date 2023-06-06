@@ -21,7 +21,9 @@ Prepend the paths below with the endpoint.
 ## Endpoints 
 
 GET `/v1/accounts/{account}`
-Provides Helium SPL token balances for a given account.
+Provides balances of HNT, MOBILE, and IOT. This endpoint is aware of positions and delegated stakes and will provide
+"locked" and "pending" amounts for balances. This endpoint is not aware of pending hotspot rewards (nor does it list
+hotspot NFTs).
 
 GET [`/v1/positions`](https://hnt-explorer.herokuapp.com/v1/positions)
 
