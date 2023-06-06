@@ -137,7 +137,8 @@ pub async fn get_all_position_owners(
     Ok(owners)
 }
 
-#[cfg(test)]
+// TODO: get CI to run these tests
+//#[cfg(test)]
 mod test {
     use super::*;
     use std::str::FromStr;
@@ -230,7 +231,7 @@ mod test {
     }
 
     #[test]
-    async fn get_all_position_owners() {
+    async fn test_get_all_position_owners() {
         let client = Client::default();
         let pubkeys = get_all_position_owners(
             &client,
