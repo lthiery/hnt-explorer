@@ -18,41 +18,43 @@ impl Account {
 
 #[derive(serde::Serialize)]
 pub struct HeliumBalances {
-    hnt: Balance,
-    iot: Balance,
-    mobile: Balance,
+    pub hnt: Balance,
+    pub iot: Balance,
+    pub mobile: Balance,
 }
 
 #[derive(serde::Serialize)]
-struct Balance {
-    mint: String,
-    value: u64,
-    decimals: u8,
+pub struct Balance {
+    pub mint: String,
+    pub amount: u64,
+    pub decimals: u8,
 }
 
 impl HeliumBalances {
     pub async fn fetch(rpc_client: &Arc<RpcClient>, account: &Pubkey) -> Result<Self> {
-        let hnt_account = get_account(rpc_client, &Pubkey::from_str(HNT_MINT)?, account).await?;
-
-        let iot_account = get_account(rpc_client, &Pubkey::from_str(IOT_MINT)?, account).await?;
-
-        let mobile_account =
-            get_account(rpc_client, &Pubkey::from_str(MOBILE_MINT)?, account).await?;
+        let hnt_mint = Pubkey::from_str(HNT_MINT)?;
+        let iot_mint = Pubkey::from_str(IOT_MINT)?;
+        let mobile_mint = Pubkey::from_str(MOBILE_MINT)?;
+        let (hnt_account, iot_account, mobile_account) = tokio::join!(
+            get_account(rpc_client, &hnt_mint, account),
+            get_account(rpc_client, &iot_mint, account),
+            get_account(rpc_client, &mobile_mint, account)
+        );
 
         Ok(Self {
             hnt: Balance {
                 mint: HNT_MINT.to_string(),
-                value: hnt_account.token,
+                amount: hnt_account?.token,
                 decimals: 8,
             },
             iot: Balance {
                 mint: IOT_MINT.to_string(),
-                value: iot_account.token,
+                amount: iot_account?.token,
                 decimals: 6,
             },
             mobile: Balance {
                 mint: MOBILE_MINT.to_string(),
-                value: mobile_account.token,
+                amount: mobile_account?.token,
                 decimals: 6,
             },
         })

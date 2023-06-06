@@ -163,14 +163,18 @@ pub async fn get_data(
 
     // if the map is empty, we assume it hasn't been initialized and so we initialize it
     if position_owners_map.is_empty() {
+        println!("Initializing position owners map");
         let client = rpc::Client::default();
         let position_keys = positions_data.positions.iter().map(|p| &p.0).collect();
         let owners = rpc::get_all_position_owners(&client, &position_keys, 100).await?;
-        positions_data.positions.iter().zip(owners.iter()).for_each(|(p, k)| {
-            position_owners_map.insert(p.0, *k);
-        });
+        positions_data
+            .positions
+            .iter()
+            .zip(owners.iter())
+            .for_each(|(p, k)| {
+                position_owners_map.insert(p.0, *k);
+            });
     }
-
 
     for (pubkey, position) in positions_data.positions.into_iter() {
         if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
@@ -338,7 +342,7 @@ fn get_stats(
 impl Positions {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
         let epoch_summaries = epoch_info::get_epoch_summaries(&rpc_client).await?;
-        let d= get_data(&rpc_client, epoch_summaries.into(), &mut HashMap::new()).await?;
+        let d = get_data(&rpc_client, epoch_summaries.into(), &mut HashMap::new()).await?;
         if self.verify {
             let iot_sub_dao_raw = rpc_client
                 .get_account(&Pubkey::from_str(IOT_SUBDAO).unwrap())
