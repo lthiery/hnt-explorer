@@ -47,10 +47,17 @@ pub async fn get_epoch_info(rpc_client: Arc<RpcClient>, memory: Arc<Mutex<Memory
 
 pub async fn get(
     Extension(memory): Extension<Arc<Mutex<Memory>>>,
-    Extension(stakes_memory): Extension<Arc<Mutex<positions::Memory>>>,
+    Extension(stakes_memory): Extension<Arc<Mutex<Option<positions::Memory>>>>,
 ) -> HandlerResult {
     let (mobile_vehnt, iot_vehnt, ts) = {
         let stakes_memory = stakes_memory.lock().await;
+        if stakes_memory.is_none() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                DATA_NOT_INIT_MSG.to_string(),
+            ));
+        }
+        let stakes_memory = stakes_memory.as_ref().unwrap();
         (
             stakes_memory.latest_data.mobile.total.vehnt,
             stakes_memory.latest_data.iot.total.vehnt,

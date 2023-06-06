@@ -111,12 +111,13 @@ pub async fn get_all_position_owners(
         for j in i {
             futures.push(async move {
                 let asset_by_authority = get_assets_by_authority(client, j).await.unwrap();
-                get_token_largest_account(client, &asset_by_authority)
-                    .await
-                    .unwrap()
+                get_token_largest_account(client, &asset_by_authority).await
             });
         }
-        let token_accounts = join_all(futures).await;
+        let token_accounts: Vec<Result<Pubkey>> = join_all(futures).await;
+        let token_accounts: Vec<Pubkey> = token_accounts
+            .into_iter()
+            .collect::<Result<Vec<Pubkey>>>()?;
         let account_data =
             get_multiple_accounts_data(client, token_accounts.iter().collect()).await?;
         let these_owners = account_data

@@ -43,7 +43,7 @@ impl Client {
             jsonrpc: String,
             #[serde(flatten)]
             response: Response<T>,
-            id: String,
+            id: Option<String>,
         }
         #[derive(Clone, Serialize, Deserialize, Debug)]
         #[serde(untagged)]
@@ -69,7 +69,9 @@ impl Client {
         let request = self.client.post(&self.base_url).json(&data);
         let response = request.send().await?;
         let body = response.text().await?;
-        let v: FullResponse<T> = serde_json::from_str(&body)?;
+        let v: FullResponse<T> = serde_json::from_str(&body)
+            .map_err(|e| Error::json_deser(e, body, serde_json::to_string(&data).unwrap()))?;
+
         match v.response {
             Response::Result { result, .. } => Ok(result),
             Response::Error {

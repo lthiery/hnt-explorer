@@ -24,6 +24,8 @@ use tokio::sync::Mutex;
 
 use solana_client::nonblocking::rpc_client::RpcClient;
 
+const DATA_NOT_INIT_MSG: &str = "Data not initialized yet. Please try again in a few minutes.";
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct Server {}
 

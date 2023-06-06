@@ -30,9 +30,7 @@ impl Memory {
     }
 
     #[allow(unused)]
-    pub async fn new(
-        latest_data: positions::PositionData
-    ) -> Result<Memory> {
+    pub async fn new(latest_data: positions::PositionData) -> Result<Memory> {
         let mut memory = Self {
             data: HashMap::new(),
             position: HashMap::new(),
@@ -201,7 +199,7 @@ pub async fn delegated_stakes(
         if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Data not initialized".to_string(),
+                "DATA_NOT_INIT_MSGData not initialized".to_string(),
             ));
         }
         let memory = memory.as_ref().unwrap();
@@ -266,7 +264,7 @@ pub async fn positions(
         if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Data not initialized".to_string(),
+                DATA_NOT_INIT_MSG.to_string(),
             ));
         }
         let memory = memory.as_ref().unwrap();
@@ -296,12 +294,9 @@ pub async fn positions(
     }
 
     let max_data = data.positions.len() - start;
-    println!("max_data: {}", max_data);
     let limit = query.limit.map_or(DEFAULT_LIMIT, |limit| {
         limit.min(DEFAULT_LIMIT).min(max_data)
     });
-    println!("limit: {}", limit);
-    println!("start: {}", start);
 
     let mut positions = Vec::with_capacity(limit);
     positions.resize(limit, positions::Position::default());
@@ -325,7 +320,7 @@ pub async fn position(
         if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Data not initialized".to_string(),
+                DATA_NOT_INIT_MSG.to_string(),
             ));
         }
         let memory = memory.as_ref().unwrap();
@@ -361,7 +356,7 @@ pub async fn positions_metadata(
         if memory.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Data not initialized".to_string(),
+                DATA_NOT_INIT_MSG.to_string(),
             ));
         }
         let memory = memory.as_ref().unwrap();
@@ -442,7 +437,7 @@ pub async fn get_positions(
                 }
             }
         }
-        time::sleep(time::Duration::from_secs(60*5)).await;
+        time::sleep(time::Duration::from_secs(60 * 5)).await;
     }
 }
 
@@ -453,7 +448,7 @@ pub async fn server_latest_delegated_positions_as_csv(
     if memory_mutex.is_none() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Data not initialized".to_string(),
+            DATA_NOT_INIT_MSG.to_string(),
         ));
     }
     let memory = memory_mutex.as_ref().unwrap();
@@ -502,7 +497,7 @@ pub async fn server_latest_positions_as_csv(
     if memory_mutex.is_none() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Data not initialized".to_string(),
+            DATA_NOT_INIT_MSG.to_string(),
         ));
     }
     let memory = memory_mutex.as_ref().unwrap();

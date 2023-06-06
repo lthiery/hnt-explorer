@@ -81,7 +81,7 @@ pub async fn get_account(
                 if positions.is_none() {
                     return Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        "Data not initialized".to_string(),
+                        DATA_NOT_INIT_MSG.to_string(),
                     ));
                 }
                 let positions = positions.as_ref().unwrap();
