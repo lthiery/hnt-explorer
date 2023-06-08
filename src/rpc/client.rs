@@ -61,6 +61,13 @@ impl Client {
         data: &D,
     ) -> Result<T> {
         #[derive(Clone, Serialize, Deserialize, Debug)]
+        #[serde(untagged)]
+        enum AllResponse<T> {
+            Ok(FullResponse<T>),
+            Err { error: String }
+        }
+
+        #[derive(Clone, Serialize, Deserialize, Debug)]
         struct FullResponse<T> {
             jsonrpc: String,
             #[serde(flatten)]
@@ -91,14 +98,19 @@ impl Client {
         let request = self.client.post(&self.base_url).json(&data);
         let response = request.send().await?;
         let body = response.text().await?;
-        let v: FullResponse<T> = serde_json::from_str(&body)
+        let response: AllResponse<T> = serde_json::from_str(&body)
             .map_err(|e| Error::json_deser(e, body, serde_json::to_string(&data).unwrap()))?;
 
-        match v.response {
-            Response::Result { result, .. } => Ok(result),
-            Response::Error {
-                error: ErrorResponse { code, message },
-            } => Err(Error::NodeError(message, code)),
+        match response {
+            AllResponse::Ok(response) => {
+                match response.response {
+                    Response::Result { result, .. } => Ok(result),
+                    Response::Error {
+                        error: ErrorResponse { code, message },
+                    } => Err(Error::NodeError(message, code)),
+                }
+            }
+            AllResponse::Err { error } => Err(Error::NodeError(error, -1)),
         }
     }
 }

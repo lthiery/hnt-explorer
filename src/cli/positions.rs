@@ -180,9 +180,13 @@ pub async fn get_data(
                     Some(owner) => Ok(*owner),
                     None => {
                         let client = rpc::Client::default();
-                        let owner = rpc::get_position_owner(&client, &pubkey).await?;
-                        position_owners_map.insert(pubkey, owner);
-                        Ok(owner)
+                        match rpc::get_position_owner(&client, &pubkey).await {
+                            Ok(owner) => {
+                                position_owners_map.insert(pubkey, owner);
+                                Ok(owner)
+                            }
+                            Err(e) => Err(e.into()),
+                        }
                     }
                 };
                 match owner {
@@ -217,17 +221,34 @@ pub async fn get_data(
 
     for (pubkey, delegated_position) in delegated_positions {
         let delegated_position = delegated_position;
-        let position_v0 = positions_raw.get(&delegated_position.position).unwrap();
-        let mut position = positions.get_mut(&delegated_position.position).unwrap();
-        position.delegated = Some(DelegatedPosition::try_from_delegated_position_v0(
-            *pubkey,
-            delegated_position,
-            &epoch_info,
-            position_v0,
-            voting_mint_config,
-        )?);
-        d.delegated_positions
-            .push(PositionLegacy::from(position.clone()));
+        let position_v0 = positions_raw.get(&delegated_position.position);
+        let position = positions.get_mut(&delegated_position.position);
+        match (position_v0, position) {
+            (Some(position_v0), Some(position)) => {
+                position.delegated = Some(DelegatedPosition::try_from_delegated_position_v0(
+                    *pubkey,
+                    delegated_position,
+                    &epoch_info,
+                    position_v0,
+                    voting_mint_config,
+                )?);
+                d.delegated_positions
+                    .push(PositionLegacy::from(position.clone()));
+            }
+            (None, Some(_)) => println!(
+                "Warning: could not find position_v0 for delegated position {}",
+                delegated_position.position
+            ),
+            (Some(_), None) => println!(
+                "Warning: could not find position for delegated position {}",
+                delegated_position.position
+            ),
+            (None, None) => println!(
+                "Warning: could not find position or position_v0 for delegated position {}",
+                delegated_position.position
+            ),
+        }
+
     }
 
     let mut hnt_amounts = vec![];

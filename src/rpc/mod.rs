@@ -113,7 +113,7 @@ pub async fn get_all_position_owners(
     use futures::future::join_all;
     use std::time::Instant;
     let mut owners = HashMap::new();
-
+    let mut processed = 0;
     println!("Fetching owners of {} positions", position_id.len());
     let start = Instant::now();
     let mut last_output = start;
@@ -152,11 +152,12 @@ pub async fn get_all_position_owners(
                 owners.insert(k, Pubkey::new(&v[32..64]));
             });
 
+        processed += chunk_size;
         if last_output.elapsed().as_secs() > 5 || owners.len() == position_id.len() {
             last_output = Instant::now();
             println!(
                 "Completed {} / {} positions in {} seconds. ",
-                owners.len(),
+                processed,
                 position_id.len(),
                 start.elapsed().as_secs()
             );
