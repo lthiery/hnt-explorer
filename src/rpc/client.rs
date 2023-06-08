@@ -64,7 +64,7 @@ impl Client {
         #[serde(untagged)]
         enum AllResponse<T> {
             Ok(FullResponse<T>),
-            Err { error: String }
+            Err { error: String },
         }
 
         #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -102,14 +102,12 @@ impl Client {
             .map_err(|e| Error::json_deser(e, body, serde_json::to_string(&data).unwrap()))?;
 
         match response {
-            AllResponse::Ok(response) => {
-                match response.response {
-                    Response::Result { result, .. } => Ok(result),
-                    Response::Error {
-                        error: ErrorResponse { code, message },
-                    } => Err(Error::NodeError(message, code)),
-                }
-            }
+            AllResponse::Ok(response) => match response.response {
+                Response::Result { result, .. } => Ok(result),
+                Response::Error {
+                    error: ErrorResponse { code, message },
+                } => Err(Error::NodeError(message, code)),
+            },
             AllResponse::Err { error } => Err(Error::NodeError(error, -1)),
         }
     }

@@ -248,7 +248,6 @@ pub async fn get_data(
                 delegated_position.position
             ),
         }
-
     }
 
     let mut hnt_amounts = vec![];
