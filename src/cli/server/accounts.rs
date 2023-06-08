@@ -8,6 +8,7 @@ use crate::SubDao;
 
 #[derive(serde::Serialize)]
 pub struct Balances {
+    vehnt: VehntBalance,
     hnt: HntBalance,
     iot: DntBalance,
     mobile: DntBalance,
@@ -31,9 +32,18 @@ struct HntBalance {
     decimals: u8,
 }
 
+#[derive(serde::Serialize, Default)]
+struct VehntBalance {
+    total: u128,
+    iot_delegated: u128,
+    mobile_delegated: u128,
+    undelegated: u128,
+}
+
 impl From<HeliumBalances> for Balances {
     fn from(value: HeliumBalances) -> Self {
         Self {
+            vehnt: VehntBalance::default(),
             hnt: HntBalance::from(value.hnt),
             iot: DntBalance::from(value.iot),
             mobile: DntBalance::from(value.mobile),
@@ -98,14 +108,17 @@ pub async fn get_account(
                             Some(p) => {
                                 balances.hnt.locked_amount += p.hnt_amount;
                                 balances.hnt.total_amount += p.hnt_amount;
+                                balances.vehnt.total += p.vehnt;
                                 if let Some(delegated) = &p.delegated {
                                     match delegated.sub_dao {
                                         SubDao::Iot => {
+                                            balances.vehnt.iot_delegated += p.vehnt;
                                             balances.iot.pending_amount +=
                                                 delegated.pending_rewards;
                                             balances.iot.total_amount += delegated.pending_rewards;
                                         }
                                         SubDao::Mobile => {
+                                            balances.vehnt.mobile_delegated += p.vehnt;
                                             balances.mobile.pending_amount +=
                                                 delegated.pending_rewards;
                                             balances.mobile.total_amount +=
@@ -115,6 +128,8 @@ pub async fn get_account(
                                             println!("Unknown subdao for delegated position {} for account {pubkey}!", p.position_key);
                                         }
                                     }
+                                } else {
+                                    balances.vehnt.undelegated += p.vehnt;
                                 }
                                 list_of_positions.push(p)
                             }
