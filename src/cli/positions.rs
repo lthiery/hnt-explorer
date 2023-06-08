@@ -165,11 +165,15 @@ pub async fn get_data(
     if position_owners_map.is_empty() {
         println!("Initializing position owners map");
         let client = rpc::Client::default();
-        let position_keys = positions_data.positions.iter().map(|p| &p.0).collect();
-        let owners = rpc::get_all_position_owners(&client, &position_keys, 100).await?;
-        owners.iter().for_each(|(k, v)| {
-            position_owners_map.insert(*k, *v);
-        });
+        let position_keys = positions_data.positions.iter().map(|p| &p.1.mint).collect();
+        let owners = rpc::get_all_owners_by_mint(&client, &position_keys, 100).await?;
+        positions_data
+            .positions
+            .iter()
+            .zip(owners.iter())
+            .for_each(|(p, k)| {
+                position_owners_map.insert(p.0, *k);
+            });
     }
 
     for (pubkey, position) in positions_data.positions.into_iter() {
@@ -180,7 +184,7 @@ pub async fn get_data(
                     Some(owner) => Ok(*owner),
                     None => {
                         let client = rpc::Client::default();
-                        match rpc::get_position_owner(&client, &pubkey).await {
+                        match rpc::get_owner_by_mint(&client, &position.mint).await {
                             Ok(owner) => {
                                 position_owners_map.insert(pubkey, owner);
                                 Ok(owner)
@@ -473,6 +477,7 @@ use helium_api::models::Hnt;
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Position {
     pub owner: String,
+    pub mint: String,
     pub position_key: String,
     pub hnt_amount: u64,
     pub start_ts: i64,
@@ -612,6 +617,7 @@ impl Position {
         Ok(Self {
             owner: owner.to_string(),
             position_key: position_key.to_string(),
+            mint: position.mint.to_string(),
             hnt_amount: position.amount_deposited_native,
             start_ts: position.lockup.start_ts,
             end_ts: position.lockup.end_ts,

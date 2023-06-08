@@ -45,7 +45,7 @@ impl Client {
     pub(crate) async fn post<T: DeserializeOwned, D: Serialize>(&self, data: &D) -> Result<T> {
         let mut result = self.post_attempt(data).await;
         let mut retries = 0;
-        while let Err(Error::NodeError(_, -32603)) = result {
+        while let Err(Error::NodeError { .. }) = result {
             retries += 1;
             if retries > self.max_retries {
                 return result;
@@ -106,9 +106,17 @@ impl Client {
                 Response::Result { result, .. } => Ok(result),
                 Response::Error {
                     error: ErrorResponse { code, message },
-                } => Err(Error::NodeError(message, code)),
+                } => Err(Error::NodeError {
+                    code,
+                    msg: message,
+                    request_json: serde_json::to_string(&data).unwrap(),
+                }),
             },
-            AllResponse::Err { error } => Err(Error::NodeError(error, -1)),
+            AllResponse::Err { error } => Err(Error::NodeError {
+                code: -1,
+                msg: error,
+                request_json: serde_json::to_string(&data).unwrap(),
+            }),
         }
     }
 }

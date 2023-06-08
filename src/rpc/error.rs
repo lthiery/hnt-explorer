@@ -4,8 +4,12 @@ use thiserror::Error;
 pub enum Error {
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
-    #[error("error code {1} from node: {0}")]
-    NodeError(String, isize),
+    #[error("error code {code} from node: {msg}. Request was: \"{request_json}\"")]
+    NodeError {
+        msg: String,
+        code: isize,
+        request_json: String,
+    },
     #[error("error deserializing JSON response: {0}. Full text: {1} to request: {2}")]
     JsonDeserialization(serde_json::Error, String, String),
     #[error("base64 decode error: {0}")]
