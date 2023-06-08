@@ -71,7 +71,10 @@ async fn get_token_largest_account(client: &Client, pubkey: &Pubkey) -> Result<P
     Ok(Pubkey::from_str(&response.value[0].address)?)
 }
 
-pub async fn get_assets_by_authority(client: &Client, authority: &Pubkey) -> Result<Pubkey> {
+pub async fn get_assets_by_authority(
+    client: &Client,
+    authority: &Pubkey,
+) -> Result<Option<Pubkey>> {
     #[derive(Deserialize, Debug)]
     pub struct AssetsByAuthorityResponse {
         pub items: Vec<Item>,
@@ -83,15 +86,25 @@ pub async fn get_assets_by_authority(client: &Client, authority: &Pubkey) -> Res
     }
     let json = RpcCall::get_assets_by_authority(authority);
     let asset_response: AssetsByAuthorityResponse = client.post(&json).await?;
-    Ok(Pubkey::from_str(&asset_response.items[0].id)?)
+    if asset_response.items.len() == 0 {
+        Ok(None)
+    } else {
+        Ok(Some(Pubkey::from_str(&asset_response.items[0].id)?))
+    }
 }
 
 #[allow(unused)]
 pub async fn get_position_owner(client: &Client, position_id: &Pubkey) -> Result<Pubkey> {
     let asset_by_authority = get_assets_by_authority(client, position_id).await?;
-    let token_largest_accounts = get_token_largest_account(client, &asset_by_authority).await?;
-    let account_data = get_account_data(client, &token_largest_accounts).await?;
-    Ok(Pubkey::new(&account_data[32..64]))
+    match asset_by_authority {
+        Some(asset_by_authority) => {
+            let token_largest_account =
+                get_token_largest_account(client, &asset_by_authority).await?;
+            let account_data = get_account_data(client, &token_largest_account).await?;
+            Ok(Pubkey::new(&account_data[32..64]))
+        }
+        None => Err(Error::NoAssetByAuthority),
+    }
 }
 
 pub async fn get_all_position_owners(
@@ -110,8 +123,12 @@ pub async fn get_all_position_owners(
         let mut futures = Vec::with_capacity(chunk_size);
         for j in i {
             futures.push(async move {
-                let asset_by_authority = get_assets_by_authority(client, j).await.unwrap();
-                get_token_largest_account(client, &asset_by_authority).await
+                let asset_by_authority = get_assets_by_authority(client, j).await?;
+                if let Some(asset_by_authority) = asset_by_authority {
+                    Ok(get_token_largest_account(client, &asset_by_authority).await?)
+                } else {
+                    Err(Error::NoAssetByAuthority)
+                }
             });
         }
         let token_accounts: Vec<Result<Pubkey>> = join_all(futures).await;
@@ -152,6 +169,7 @@ mod test {
             &Pubkey::from_str("EvXrmwTJaqXvAL5skuyiWRV1X7MPwmZYX8Qp3DCw83RT").unwrap(),
         )
         .await
+        .unwrap()
         .unwrap();
         assert_eq!(
             asset_by_authority,
