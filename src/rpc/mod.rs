@@ -104,7 +104,7 @@ pub async fn get_position_owner(client: &Client, position_id: &Pubkey) -> Result
 
 #[allow(unused)]
 pub async fn get_owner_by_mint(client: &Client, mint: &Pubkey) -> Result<Pubkey> {
-    let token_largest_accounts = get_token_largest_account(client, &mint).await?;
+    let token_largest_accounts = get_token_largest_account(client, mint).await?;
     let account_data = get_account_data(client, &token_largest_accounts).await?;
     Ok(Pubkey::new(&account_data[32..64]))
 }
