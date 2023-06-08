@@ -406,15 +406,8 @@ pub async fn get_positions(
             Memory::pull_latest_data(&rpc_client, epoch_memory.clone(), &mut position_owner_map)
                 .await;
         // if the first pull fails, keep trying until it succeeds
-        while latest_data.is_err() {
-            latest_data = Memory::pull_latest_data(
-                &rpc_client,
-                epoch_memory.clone(),
-                &mut position_owner_map,
-            )
-            .await;
-        }
-        {
+        while let Err(e) = latest_data {
+            println!("Error pulling data: {e:?}");
             latest_data = Memory::pull_latest_data(
                 &rpc_client,
                 epoch_memory.clone(),

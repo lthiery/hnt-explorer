@@ -7,6 +7,7 @@ pub const DEFAULT_TIMEOUT: u64 = 120;
 pub struct Client {
     base_url: String,
     client: reqwest::Client,
+    max_retries: usize,
 }
 
 impl Default for Client {
@@ -34,10 +35,31 @@ impl Client {
             .timeout(Duration::from_secs(timeout))
             .build()
             .unwrap();
-        Self { base_url, client }
+        Self {
+            base_url,
+            client,
+            max_retries: 5,
+        }
     }
 
-    pub(crate) async fn post<T: DeserializeOwned, D: Serialize>(&self, data: D) -> Result<T> {
+    pub(crate) async fn post<T: DeserializeOwned, D: Serialize>(&self, data: &D) -> Result<T> {
+        let mut result = self.post_attempt(data).await;
+        let mut retries = 0;
+        while let Err(Error::NodeError(_, -32603)) = result {
+            retries += 1;
+            if retries > self.max_retries {
+                return result;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            result = self.post_attempt(data).await;
+        }
+        result
+    }
+
+    pub(crate) async fn post_attempt<T: DeserializeOwned, D: Serialize>(
+        &self,
+        data: &D,
+    ) -> Result<T> {
         #[derive(Clone, Serialize, Deserialize, Debug)]
         struct FullResponse<T> {
             jsonrpc: String,

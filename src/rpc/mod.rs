@@ -1,6 +1,7 @@
 use base64::Engine;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
@@ -71,7 +72,10 @@ async fn get_token_largest_account(client: &Client, pubkey: &Pubkey) -> Result<P
     Ok(Pubkey::from_str(&response.value[0].address)?)
 }
 
-pub async fn get_assets_by_authority(client: &Client, authority: &Pubkey) -> Result<Pubkey> {
+pub async fn get_assets_by_authority(
+    client: &Client,
+    authority: &Pubkey,
+) -> Result<Option<Pubkey>> {
     #[derive(Deserialize, Debug)]
     pub struct AssetsByAuthorityResponse {
         pub items: Vec<Item>,
@@ -83,25 +87,32 @@ pub async fn get_assets_by_authority(client: &Client, authority: &Pubkey) -> Res
     }
     let json = RpcCall::get_assets_by_authority(authority);
     let asset_response: AssetsByAuthorityResponse = client.post(&json).await?;
-    Ok(Pubkey::from_str(&asset_response.items[0].id)?)
+    Ok(if asset_response.items.is_empty() {
+        None
+    } else {
+        Some(Pubkey::from_str(&asset_response.items[0].id)?)
+    })
 }
 
 #[allow(unused)]
 pub async fn get_position_owner(client: &Client, position_id: &Pubkey) -> Result<Pubkey> {
-    let asset_by_authority = get_assets_by_authority(client, position_id).await?;
-    let token_largest_accounts = get_token_largest_account(client, &asset_by_authority).await?;
-    let account_data = get_account_data(client, &token_largest_accounts).await?;
-    Ok(Pubkey::new(&account_data[32..64]))
+    if let Some(asset_by_authority) = get_assets_by_authority(client, position_id).await? {
+        let token_largest_accounts = get_token_largest_account(client, &asset_by_authority).await?;
+        let account_data = get_account_data(client, &token_largest_accounts).await?;
+        Ok(Pubkey::new(&account_data[32..64]))
+    } else {
+        Err(Error::NoAssetByAuthority(position_id.to_string()))
+    }
 }
 
 pub async fn get_all_position_owners(
     client: &Client,
     position_id: &Vec<&Pubkey>,
     chunk_size: usize,
-) -> Result<Vec<Pubkey>> {
+) -> Result<HashMap<Pubkey, Pubkey>> {
     use futures::future::join_all;
     use std::time::Instant;
-    let mut owners = Vec::with_capacity(position_id.len());
+    let mut owners = HashMap::new();
 
     println!("Fetching owners of {} positions", position_id.len());
     let start = Instant::now();
@@ -110,21 +121,37 @@ pub async fn get_all_position_owners(
         let mut futures = Vec::with_capacity(chunk_size);
         for j in i {
             futures.push(async move {
-                let asset_by_authority = get_assets_by_authority(client, j).await.unwrap();
-                get_token_largest_account(client, &asset_by_authority).await
+                let asset_by_authority = get_assets_by_authority(client, j).await?;
+                Ok(if let Some(asset_by_authority) = asset_by_authority {
+                    (
+                        **j,
+                        Some(get_token_largest_account(client, &asset_by_authority).await?),
+                    )
+                } else {
+                    println!("Warning: no asset by authority for {j}");
+                    (**j, None)
+                })
             });
         }
-        let token_accounts: Vec<Result<Pubkey>> = join_all(futures).await;
-        let token_accounts: Vec<Pubkey> = token_accounts
+        let token_accounts: Vec<Result<(Pubkey, Option<Pubkey>)>> = join_all(futures).await;
+        let token_accounts: Vec<(Pubkey, Option<Pubkey>)> = token_accounts
             .into_iter()
-            .collect::<Result<Vec<Pubkey>>>()?;
-        let account_data =
-            get_multiple_accounts_data(client, token_accounts.iter().collect()).await?;
-        let these_owners = account_data
+            .collect::<Result<Vec<(Pubkey, Option<Pubkey>)>>>()?;
+        let token_accounts: Vec<(Pubkey, Pubkey)> = token_accounts
             .into_iter()
-            .map(|v| Pubkey::new(&v[32..64]))
-            .collect::<Vec<Pubkey>>();
-        owners.extend(&these_owners);
+            .filter_map(|(k, v)| v.map(|v| (k, v)))
+            .collect();
+
+        let query = token_accounts.iter().map(|(_, v)| v).collect();
+
+        let account_data = get_multiple_accounts_data(client, query).await?;
+        token_accounts
+            .into_iter()
+            .zip(account_data.iter())
+            .for_each(|((k, _), v)| {
+                owners.insert(k, Pubkey::new(&v[32..64]));
+            });
+
         if last_output.elapsed().as_secs() > 5 || owners.len() == position_id.len() {
             last_output = Instant::now();
             println!(
@@ -152,6 +179,7 @@ mod test {
             &Pubkey::from_str("EvXrmwTJaqXvAL5skuyiWRV1X7MPwmZYX8Qp3DCw83RT").unwrap(),
         )
         .await
+        .unwrap()
         .unwrap();
         assert_eq!(
             asset_by_authority,
@@ -210,8 +238,7 @@ mod test {
         let pubkey = Pubkey::new(&data[1][32..64]);
         assert_eq!(
             pubkey,
-            solana_sdk::pubkey::Pubkey::from_str("CCUWF8sALfvVtv1EvKwuM4p7ZgUWvsrKVzQfFGmBz6pa")
-                .unwrap()
+            Pubkey::from_str("CCUWF8sALfvVtv1EvKwuM4p7ZgUWvsrKVzQfFGmBz6pa").unwrap()
         );
     }
 
@@ -233,23 +260,19 @@ mod test {
     #[test]
     async fn test_get_all_position_owners() {
         let client = Client::default();
-        let pubkeys = get_all_position_owners(
-            &client,
-            &vec![
-                &Pubkey::from_str("E6ELFUZMahhCgsPCeEYXtQT51Yq24Yg4WAhmQJBsGxhg").unwrap(),
-                &Pubkey::from_str("3NW4DzSNeS72pJXCpAszC6r4Su1Ku6RHEDwRmzVXMVxo").unwrap(),
-            ],
-            2,
-        )
-        .await
-        .unwrap();
+        let positions = vec![
+            Pubkey::from_str("E6ELFUZMahhCgsPCeEYXtQT51Yq24Yg4WAhmQJBsGxhg").unwrap(),
+            Pubkey::from_str("3NW4DzSNeS72pJXCpAszC6r4Su1Ku6RHEDwRmzVXMVxo").unwrap(),
+        ];
+        let query = positions.iter().map(|v| v).collect();
+        let pubkeys = get_all_position_owners(&client, &query, 2).await.unwrap();
         assert_eq!(
-            pubkeys[0],
-            Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
+            pubkeys.get(&positions[0]).unwrap(),
+            &Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
         );
         assert_eq!(
-            pubkeys[1],
-            Pubkey::from_str("BKw4D8sv6Wt67LmUqVN1gLpe2XUDicifdrSBuGcYvPz2").unwrap()
+            pubkeys.get(&positions[1]).unwrap(),
+            &Pubkey::from_str("BKw4D8sv6Wt67LmUqVN1gLpe2XUDicifdrSBuGcYvPz2").unwrap()
         );
     }
 }

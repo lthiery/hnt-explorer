@@ -167,37 +167,38 @@ pub async fn get_data(
         let client = rpc::Client::default();
         let position_keys = positions_data.positions.iter().map(|p| &p.0).collect();
         let owners = rpc::get_all_position_owners(&client, &position_keys, 100).await?;
-        positions_data
-            .positions
-            .iter()
-            .zip(owners.iter())
-            .for_each(|(p, k)| {
-                position_owners_map.insert(p.0, *k);
-            });
+        owners.iter().for_each(|(k, v)| {
+            position_owners_map.insert(*k, *v);
+        });
     }
 
     for (pubkey, position) in positions_data.positions.into_iter() {
         if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
             if mint.to_string().as_str() == HNT_MINT {
                 positions_raw.insert(pubkey, position.clone());
-                let owner = match position_owners_map.get(&pubkey) {
-                    Some(owner) => *owner,
+                let owner: Result<Pubkey> = match position_owners_map.get(&pubkey) {
+                    Some(owner) => Ok(*owner),
                     None => {
                         let client = rpc::Client::default();
                         let owner = rpc::get_position_owner(&client, &pubkey).await?;
                         position_owners_map.insert(pubkey, owner);
-                        owner
+                        Ok(owner)
                     }
                 };
-                let position = Position::try_from_positionv0(
-                    owner,
-                    pubkey,
-                    position,
-                    d.timestamp,
-                    voting_mint_config,
-                )
-                .await?;
-                positions.insert(pubkey, position);
+                match owner {
+                    Err(e) => println!("Warning: could not get owner for position {pubkey}: {e}"),
+                    Ok(owner) => {
+                        let position = Position::try_from_positionv0(
+                            owner,
+                            pubkey,
+                            position,
+                            d.timestamp,
+                            voting_mint_config,
+                        )
+                        .await?;
+                        positions.insert(pubkey, position);
+                    }
+                }
             }
         } else {
             println!("No mint found for registrar {}", position.registrar)
