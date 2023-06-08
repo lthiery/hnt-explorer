@@ -167,37 +167,42 @@ pub async fn get_data(
         let client = rpc::Client::default();
         let position_keys = positions_data.positions.iter().map(|p| &p.0).collect();
         let owners = rpc::get_all_position_owners(&client, &position_keys, 100).await?;
-        positions_data
-            .positions
-            .iter()
-            .zip(owners.iter())
-            .for_each(|(p, k)| {
-                position_owners_map.insert(p.0, *k);
-            });
+        owners.iter().for_each(|(k, v)| {
+            position_owners_map.insert(*k, *v);
+        });
     }
 
     for (pubkey, position) in positions_data.positions.into_iter() {
         if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
             if mint.to_string().as_str() == HNT_MINT {
                 positions_raw.insert(pubkey, position.clone());
-                let owner = match position_owners_map.get(&pubkey) {
-                    Some(owner) => *owner,
+                let owner: Result<Pubkey> = match position_owners_map.get(&pubkey) {
+                    Some(owner) => Ok(*owner),
                     None => {
                         let client = rpc::Client::default();
-                        let owner = rpc::get_position_owner(&client, &pubkey).await?;
-                        position_owners_map.insert(pubkey, owner);
-                        owner
+                        match rpc::get_position_owner(&client, &pubkey).await {
+                            Ok(owner) => {
+                                position_owners_map.insert(pubkey, owner);
+                                Ok(owner)
+                            }
+                            Err(e) => Err(e.into()),
+                        }
                     }
                 };
-                let position = Position::try_from_positionv0(
-                    owner,
-                    pubkey,
-                    position,
-                    d.timestamp,
-                    voting_mint_config,
-                )
-                .await?;
-                positions.insert(pubkey, position);
+                match owner {
+                    Err(e) => println!("Warning: could not get owner for position {pubkey}: {e}"),
+                    Ok(owner) => {
+                        let position = Position::try_from_positionv0(
+                            owner,
+                            pubkey,
+                            position,
+                            d.timestamp,
+                            voting_mint_config,
+                        )
+                        .await?;
+                        positions.insert(pubkey, position);
+                    }
+                }
             }
         } else {
             println!("No mint found for registrar {}", position.registrar)
@@ -216,17 +221,34 @@ pub async fn get_data(
 
     for (pubkey, delegated_position) in delegated_positions {
         let delegated_position = delegated_position;
-        let position_v0 = positions_raw.get(&delegated_position.position).unwrap();
-        let mut position = positions.get_mut(&delegated_position.position).unwrap();
-        position.delegated = Some(DelegatedPosition::try_from_delegated_position_v0(
-            *pubkey,
-            delegated_position,
-            &epoch_info,
-            position_v0,
-            voting_mint_config,
-        )?);
-        d.delegated_positions
-            .push(PositionLegacy::from(position.clone()));
+        let position_v0 = positions_raw.get(&delegated_position.position);
+        let position = positions.get_mut(&delegated_position.position);
+        match (position_v0, position) {
+            (Some(position_v0), Some(position)) => {
+                position.delegated = Some(DelegatedPosition::try_from_delegated_position_v0(
+                    *pubkey,
+                    delegated_position,
+                    &epoch_info,
+                    position_v0,
+                    voting_mint_config,
+                )?);
+                d.delegated_positions
+                    .push(PositionLegacy::from(position.clone()));
+            }
+            (None, Some(_)) => println!(
+                "Warning: could not find position_v0 for delegated position {}",
+                delegated_position.position
+            ),
+            (Some(_), None) => println!(
+                "Warning: could not find position for delegated position {}",
+                delegated_position.position
+            ),
+            (None, None) => println!(
+                "Warning: could not find position or position_v0 for delegated position {}",
+                delegated_position.position
+            ),
+        }
+
     }
 
     let mut hnt_amounts = vec![];

@@ -14,6 +14,8 @@ pub enum Error {
     SolanaParsePubkey(#[from] solana_sdk::pubkey::ParsePubkeyError),
     #[error("join error: {0} ")]
     Join(#[from] tokio::task::JoinError),
+    #[error("no asset by authority for {0}")]
+    NoAssetByAuthority(String),
 }
 
 impl Error {
