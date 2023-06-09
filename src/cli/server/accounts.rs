@@ -1,4 +1,4 @@
-use super::*;
+use super::{*, positions};
 use axum::extract::Path;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
@@ -14,8 +14,17 @@ pub struct Balances {
     mobile: DntBalance,
 }
 
+impl Balances {
+    pub fn absorb_position_balances(&mut self, locked_balances: positions::LockedBalances) {
+        self.vehnt = locked_balances.vehnt;
+        self.hnt.locked_amount = locked_balances.locked_hnt;
+        self.hnt.total_amount += locked_balances.locked_hnt;
+        self.iot.absorb_pending_amount(locked_balances.pending_iot);
+        self.mobile.absorb_pending_amount(locked_balances.pending_mobile);
+    }
+}
 #[derive(serde::Serialize)]
-struct DntBalance {
+pub struct DntBalance {
     amount: u64,
     pending_amount: u64,
     total_amount: u64,
@@ -23,8 +32,15 @@ struct DntBalance {
     decimals: u8,
 }
 
+impl DntBalance {
+    pub fn absorb_pending_amount(&mut self, pending: u64)  {
+        self.total_amount += pending;
+        self.pending_amount = pending;
+    }
+}
+
 #[derive(serde::Serialize)]
-struct HntBalance {
+pub struct HntBalance {
     amount: u64,
     locked_amount: u64,
     total_amount: u64,
@@ -32,12 +48,12 @@ struct HntBalance {
     decimals: u8,
 }
 
-#[derive(serde::Serialize, Default)]
-struct VehntBalance {
-    total: u128,
-    iot_delegated: u128,
-    mobile_delegated: u128,
-    undelegated: u128,
+#[derive(serde::Serialize, Default, Copy, Clone, Debug)]
+pub struct VehntBalance {
+    pub total: u128,
+    pub iot_delegated: u128,
+    pub mobile_delegated: u128,
+    pub undelegated: u128,
 }
 
 impl From<HeliumBalances> for Balances {
@@ -74,6 +90,7 @@ impl From<accounts::Balance> for HntBalance {
         }
     }
 }
+
 pub async fn get_account(
     Extension(rpc_client): Extension<Arc<RpcClient>>,
     Extension(positions): Extension<Arc<Mutex<Option<positions::Memory>>>>,
@@ -83,7 +100,7 @@ pub async fn get_account(
         match HeliumBalances::fetch(&rpc_client, &pubkey).await {
             Err(e) => {
                 println!("Error fetching account: {}", e);
-                Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+                Err((StatusCode::INTERNAL_SERVER_ERROR, "Error fetching account".to_string()))
             }
             Ok(balances) => {
                 let mut balances = Balances::from(balances);
@@ -96,9 +113,10 @@ pub async fn get_account(
                 }
                 let positions = positions.as_ref().unwrap();
 
-                if let Some(owned_positions) = positions.positions_by_owner.get(&pubkey) {
+                if let Some(account) = positions.positions_by_owner.get(&pubkey) {
+                    balances.absorb_position_balances(account.balances);
                     let mut list_of_positions = Vec::new();
-                    for p in owned_positions {
+                    for p in account.positions.iter() {
                         match positions.position.get(p) {
                             None => {
                                 let error = format!("Expected to find position {p} for account {pubkey} but none found!");
@@ -106,31 +124,6 @@ pub async fn get_account(
                                 return Err((StatusCode::INTERNAL_SERVER_ERROR, error));
                             }
                             Some(p) => {
-                                balances.hnt.locked_amount += p.hnt_amount;
-                                balances.hnt.total_amount += p.hnt_amount;
-                                balances.vehnt.total += p.vehnt;
-                                if let Some(delegated) = &p.delegated {
-                                    match delegated.sub_dao {
-                                        SubDao::Iot => {
-                                            balances.vehnt.iot_delegated += p.vehnt;
-                                            balances.iot.pending_amount +=
-                                                delegated.pending_rewards;
-                                            balances.iot.total_amount += delegated.pending_rewards;
-                                        }
-                                        SubDao::Mobile => {
-                                            balances.vehnt.mobile_delegated += p.vehnt;
-                                            balances.mobile.pending_amount +=
-                                                delegated.pending_rewards;
-                                            balances.mobile.total_amount +=
-                                                delegated.pending_rewards;
-                                        }
-                                        SubDao::Unknown => {
-                                            println!("Unknown subdao for delegated position {} for account {pubkey}!", p.position_key);
-                                        }
-                                    }
-                                } else {
-                                    balances.vehnt.undelegated += p.vehnt;
-                                }
                                 list_of_positions.push(p)
                             }
                         }
@@ -153,3 +146,36 @@ pub async fn get_account(
         ))
     }
 }
+
+// pub async fn get_vehnt_richlist(
+//     Extension(rpc_client): Extension<Arc<RpcClient>>,
+//     Extension(positions): Extension<Arc<Mutex<Option<positions::Memory>>>>,
+//     Path(account): Path<String>,
+// ) -> HandlerResult {
+//
+//     let positions = positions.lock().await;
+//     if positions.is_none() {
+//         return Err((
+//             StatusCode::INTERNAL_SERVER_ERROR,
+//             DATA_NOT_INIT_MSG.to_string(),
+//         ));
+//     }
+//     let positions = positions.as_ref().unwrap();
+//     let positions_by_owner = positions.positions_by_owner.iter();
+//     let balances_by_owner = positions_by_owner.map(
+//         |owner, positions| {
+//             let vehnt_balance = VehntBalance::default();
+//             for p in positions {
+//
+//             }
+//
+//
+//             (k, total)
+//         }
+//     )
+//
+//     Err((
+//         StatusCode::BAD_REQUEST,
+//         format!("\"{account}\" is not a valid base58 encoded Solana pubkey"),
+//     ))
+// }

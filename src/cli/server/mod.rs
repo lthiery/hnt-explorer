@@ -47,6 +47,7 @@ impl Server {
         // build our application with a route
         let app = Router::new()
             .route("/v1/accounts/:account", get(accounts::get_account))
+            .route("/v1/accounts/richlist/vehnt", get(accounts::get_account))
             .route("/v1/delegated_stakes", get(positions::delegated_stakes))
             .route(
                 "/v1/delegated_stakes/csv",

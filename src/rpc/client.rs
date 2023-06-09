@@ -7,7 +7,7 @@ pub const DEFAULT_TIMEOUT: u64 = 120;
 pub struct Client {
     base_url: String,
     client: reqwest::Client,
-    max_retries: usize,
+    max_retries: u64,
 }
 
 impl Default for Client {
@@ -50,7 +50,7 @@ impl Client {
             if retries > self.max_retries {
                 return result;
             }
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(retries)).await;
             result = self.post_attempt(data).await;
         }
         result
