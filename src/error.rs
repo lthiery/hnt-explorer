@@ -1,4 +1,5 @@
 use crate::rpc;
+use solana_sdk::pubkey::Pubkey;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -41,6 +42,8 @@ pub enum Error {
     SerdeJson(#[from] serde_json::Error),
     #[error("rpc error: {0}")]
     Rpc(#[from] rpc::Error),
+    #[error("Expected to find position {position} but none found!")]
+    MissingPosition { position: Pubkey },
 }
 
 impl From<anchor_lang::error::Error> for Error {
