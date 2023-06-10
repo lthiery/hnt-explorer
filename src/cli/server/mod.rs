@@ -48,7 +48,7 @@ impl Server {
         let app = Router::new()
             .route("/v1/accounts/:account", get(accounts::get_account))
             .route(
-                "/v1/accounts/top/vehnt",
+                "/v1/accounts/vehnt/top",
                 get(accounts::get_top_vehnt_accounts),
             )
             .route("/v1/delegated_stakes", get(positions::delegated_stakes))
