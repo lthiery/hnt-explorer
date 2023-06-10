@@ -26,7 +26,7 @@ pub struct Account {
     pub positions: Vec<Pubkey>,
 }
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, serde::Serialize)]
 pub struct LockedBalances {
     pub vehnt: VehntBalance,
     pub locked_hnt: u64,
@@ -54,9 +54,7 @@ impl Account {
     ) -> Result {
         match positions.get(&pubkey) {
             None => {
-                return Err(Error::MissingPosition {
-                    position: pubkey,
-                });
+                return Err(Error::MissingPosition { position: pubkey });
             }
             Some(p) => {
                 self.balances.locked_hnt += p.hnt_amount;
@@ -213,8 +211,10 @@ impl Memory {
             if let Some(entry) = positions_by_owner.get_mut(&owner) {
                 entry.push_entry(&self.position, position)?;
             } else {
-                positions_by_owner
-                    .insert(owner, Account::initialize_with_element(&self.position, position)?);
+                positions_by_owner.insert(
+                    owner,
+                    Account::initialize_with_element(&self.position, position)?,
+                );
             }
         }
         self.positions_by_owner = positions_by_owner;
