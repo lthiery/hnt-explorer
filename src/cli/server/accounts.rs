@@ -1,10 +1,10 @@
-use super::{*, positions};
+use super::{positions, *};
 use axum::extract::Path;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
 use crate::cli::accounts::{self, HeliumBalances};
-use crate::SubDao;
+use crate::cli::server::positions::LockedBalances;
 
 #[derive(serde::Serialize)]
 pub struct Balances {
@@ -20,7 +20,8 @@ impl Balances {
         self.hnt.locked_amount = locked_balances.locked_hnt;
         self.hnt.total_amount += locked_balances.locked_hnt;
         self.iot.absorb_pending_amount(locked_balances.pending_iot);
-        self.mobile.absorb_pending_amount(locked_balances.pending_mobile);
+        self.mobile
+            .absorb_pending_amount(locked_balances.pending_mobile);
     }
 }
 #[derive(serde::Serialize)]
@@ -33,7 +34,7 @@ pub struct DntBalance {
 }
 
 impl DntBalance {
-    pub fn absorb_pending_amount(&mut self, pending: u64)  {
+    pub fn absorb_pending_amount(&mut self, pending: u64) {
         self.total_amount += pending;
         self.pending_amount = pending;
     }
@@ -100,7 +101,10 @@ pub async fn get_account(
         match HeliumBalances::fetch(&rpc_client, &pubkey).await {
             Err(e) => {
                 println!("Error fetching account: {}", e);
-                Err((StatusCode::INTERNAL_SERVER_ERROR, "Error fetching account".to_string()))
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Error fetching account".to_string(),
+                ))
             }
             Ok(balances) => {
                 let mut balances = Balances::from(balances);
@@ -123,9 +127,7 @@ pub async fn get_account(
                                 println!("{error}");
                                 return Err((StatusCode::INTERNAL_SERVER_ERROR, error));
                             }
-                            Some(p) => {
-                                list_of_positions.push(p)
-                            }
+                            Some(p) => list_of_positions.push(p),
                         }
                     }
                     Ok(response::Json(json!({
@@ -147,35 +149,58 @@ pub async fn get_account(
     }
 }
 
-// pub async fn get_vehnt_richlist(
-//     Extension(rpc_client): Extension<Arc<RpcClient>>,
-//     Extension(positions): Extension<Arc<Mutex<Option<positions::Memory>>>>,
-//     Path(account): Path<String>,
-// ) -> HandlerResult {
-//
-//     let positions = positions.lock().await;
-//     if positions.is_none() {
-//         return Err((
-//             StatusCode::INTERNAL_SERVER_ERROR,
-//             DATA_NOT_INIT_MSG.to_string(),
-//         ));
-//     }
-//     let positions = positions.as_ref().unwrap();
-//     let positions_by_owner = positions.positions_by_owner.iter();
-//     let balances_by_owner = positions_by_owner.map(
-//         |owner, positions| {
-//             let vehnt_balance = VehntBalance::default();
-//             for p in positions {
-//
-//             }
-//
-//
-//             (k, total)
-//         }
-//     )
-//
-//     Err((
-//         StatusCode::BAD_REQUEST,
-//         format!("\"{account}\" is not a valid base58 encoded Solana pubkey"),
-//     ))
-// }
+#[derive(serde::Serialize)]
+pub struct TopVehntResult {
+    pub pubkey: String,
+    pub positions: Vec<String>,
+    #[serde(flatten)]
+    pub locked_balances: LockedBalances,
+}
+
+use std::cmp::{Ord, Ordering};
+impl Ord for TopVehntResult {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.locked_balances
+            .vehnt
+            .total
+            .cmp(&other.locked_balances.vehnt.total)
+    }
+}
+impl PartialEq for TopVehntResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.pubkey == other.pubkey
+    }
+}
+impl Eq for TopVehntResult {}
+impl PartialOrd for TopVehntResult {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+pub async fn get_top_vehnt_accounts(
+    Extension(positions): Extension<Arc<Mutex<Option<positions::Memory>>>>,
+) -> HandlerResult {
+    let positions = positions.lock().await;
+    if positions.is_none() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            DATA_NOT_INIT_MSG.to_string(),
+        ));
+    }
+    let positions = positions.as_ref().unwrap();
+    let positions_by_owner = positions.positions_by_owner.iter();
+    let mut owners_and_balances: Vec<TopVehntResult> = positions_by_owner
+        .map(|(owner, account)| TopVehntResult {
+            pubkey: owner.to_string(),
+            positions: account.positions.iter().map(|p| p.to_string()).collect(),
+            locked_balances: account.balances,
+        })
+        .collect();
+    owners_and_balances.sort();
+    owners_and_balances.reverse();
+    owners_and_balances.truncate(100);
+    Ok(response::Json(json!({
+        "top": owners_and_balances,
+    })))
+}
