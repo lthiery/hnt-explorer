@@ -25,6 +25,9 @@ Provides balances of HNT, MOBILE, and IOT. This endpoint is aware of positions a
 "locked" and "pending" amounts for balances. This endpoint is not aware of pending hotspot rewards (nor does it list
 hotspot NFTs).
 
+GET [`/v1/accounts/vehnt/top`](https://hnt-explorer.herokuapp.com/v1/accounts/vehnt/top)
+Provides the a list of the top 100 accounts in veHNT holdings.
+
 GET [`/v1/positions`](https://hnt-explorer.herokuapp.com/v1/positions)
 
 Params: `limit`, `start`, `timestamp`
