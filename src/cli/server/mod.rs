@@ -58,11 +58,20 @@ impl Server {
             )
             .route(
                 "/v1/delegated_stakes/info",
-                get(positions::positions_metadata),
+                get(positions::vehnt_positions_stats),
             )
-            .route("/v1/positions", get(positions::positions))
-            .route("/v1/positions/:position", get(positions::position))
-            .route("/v1/positions/info", get(positions::positions_metadata))
+            .route("/v1/positions", get(positions::vehnt_positions))
+            .route("/v1/positions/:position", get(positions::vehnt_position))
+            .route("/v1/positions/info", get(positions::vehnt_positions_stats))
+            .route("/v1/positions/vehnt", get(positions::vehnt_positions))
+            .route(
+                "/v1/positions/vehnt/:position",
+                get(positions::vehnt_position),
+            )
+            .route(
+                "/v1/positions/vehnt/stats",
+                get(positions::vehnt_positions_stats),
+            )
             .route(
                 "/v1/positions/csv",
                 get(positions::server_latest_positions_as_csv),

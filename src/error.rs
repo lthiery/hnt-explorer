@@ -44,6 +44,8 @@ pub enum Error {
     Rpc(#[from] rpc::Error),
     #[error("Expected to find position {position} but none found!")]
     MissingPosition { position: Pubkey },
+    #[error("No registrar for mint {0}")]
+    NoRegistrarForMint(&'static str),
 }
 
 impl From<anchor_lang::error::Error> for Error {

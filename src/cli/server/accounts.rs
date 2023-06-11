@@ -15,7 +15,7 @@ pub struct Balances {
 }
 
 impl Balances {
-    pub fn absorb_position_balances(&mut self, locked_balances: positions::LockedBalances) {
+    pub fn absorb_position_balances(&mut self, locked_balances: LockedBalances) {
         self.vehnt = locked_balances.vehnt;
         self.hnt.locked_amount = locked_balances.locked_hnt;
         self.hnt.total_amount += locked_balances.locked_hnt;
