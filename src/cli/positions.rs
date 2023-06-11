@@ -29,7 +29,7 @@ async fn get_stake_accounts_incremental(
 }
 
 /// This function will work until there's too many to fetch in a single call
-pub async fn get_stake_accounts(
+pub async fn get_delegateed_positions(
     rpc_client: &RpcClient,
 ) -> Result<Vec<(Pubkey, solana_sdk::account::Account)>> {
     const DELEGATE_POSITION_V0_DESCRIMINATOR: [u8; 8] = [251, 212, 32, 100, 102, 1, 247, 81];
@@ -52,7 +52,7 @@ async fn get_accounts_with_prefix(
 }
 
 #[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct PositionData {
+pub struct VeHntPositionData {
     pub timestamp: i64,
     pub positions: Vec<Position>,
     #[serde(skip_serializing)]
@@ -62,6 +62,21 @@ pub struct PositionData {
     pub undelegated: Data,
     pub mobile: Data,
     pub iot: Data,
+}
+
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DntPositionData {
+    pub timestamp: i64,
+    pub positions: Vec<Position>,
+    #[serde(skip_serializing)]
+    pub positions_total_len: usize,
+}
+
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AllPositionsData {
+    pub vehnt: VeHntPositionData,
+    pub vemobile: DntPositionData,
+    pub veiot: DntPositionData,
 }
 
 #[derive(Default, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -131,11 +146,25 @@ impl Data {
     }
 }
 
-impl PositionData {
+impl AllPositionsData {
     pub fn new() -> Self {
         let curr_ts = Utc::now().timestamp();
         Self {
-            timestamp: curr_ts,
+            vehnt: VeHntPositionData::new(curr_ts),
+            vemobile: DntPositionData::new(curr_ts),
+            veiot: DntPositionData::new(curr_ts),
+        }
+    }
+
+    pub fn scale_down(&mut self) {
+        self.vehnt.scale_down();
+    }
+}
+
+impl VeHntPositionData {
+    pub fn new(timestamp: i64) -> Self {
+        Self {
+            timestamp,
             ..Default::default()
         }
     }
@@ -148,45 +177,36 @@ impl PositionData {
     }
 }
 
-pub async fn get_data(
-    rpc_client: &RpcClient,
-    epoch_info: Arc<Vec<epoch_info::EpochSummary>>,
-    position_owners_map: &mut HashMap<Pubkey, Pubkey>,
-) -> Result<PositionData> {
-    let mut d = PositionData::new();
-    let positions_data = locked::get_data(rpc_client).await?;
+impl DntPositionData {
+    pub fn new(timestamp: i64) -> Self {
+        Self {
+            timestamp,
+            ..Default::default()
+        }
+    }
+}
 
-    let voting_mint_config = &positions_data.mint_configs
-        [&Pubkey::from_str("hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux")?];
+pub async fn get_positions_of_mint(
+    positions_data: &locked::Data,
+    position_owners_map: &mut HashMap<Pubkey, Pubkey>,
+    mint: &str,
+    timestamp: i64,
+) -> Result<(HashMap<Pubkey, PositionV0>, HashMap<Pubkey, Position>)> {
+    let voting_mint_config = &positions_data.mint_configs[&Pubkey::from_str(mint)?];
     let mut positions_raw = HashMap::new();
     let mut positions = HashMap::new();
 
-    // if the map is empty, we assume it hasn't been initialized and so we initialize it
-    if position_owners_map.is_empty() {
-        println!("Initializing position owners map");
-        let client = rpc::Client::default();
-        let position_keys = positions_data.positions.iter().map(|p| &p.1.mint).collect();
-        let owners = rpc::get_all_owners_by_mint(&client, &position_keys, 100).await?;
-        positions_data
-            .positions
-            .iter()
-            .zip(owners.iter())
-            .for_each(|(p, k)| {
-                position_owners_map.insert(p.0, *k);
-            });
-    }
-
-    for (pubkey, position) in positions_data.positions.into_iter() {
-        if let Some(mint) = positions_data.registrar_to_mint.get(&position.registrar) {
-            if mint.to_string().as_str() == HNT_MINT {
-                positions_raw.insert(pubkey, position.clone());
-                let owner: Result<Pubkey> = match position_owners_map.get(&pubkey) {
+    for (pubkey, position) in positions_data.positions.iter() {
+        if let Some(position_mint) = positions_data.registrar_to_mint.get(&position.registrar) {
+            if position_mint.to_string().as_str() == mint {
+                positions_raw.insert(*pubkey, position.clone());
+                let owner: Result<Pubkey> = match position_owners_map.get(pubkey) {
                     Some(owner) => Ok(*owner),
                     None => {
                         let client = rpc::Client::default();
                         match rpc::get_owner_by_mint(&client, &position.mint).await {
                             Ok(owner) => {
-                                position_owners_map.insert(pubkey, owner);
+                                position_owners_map.insert(*pubkey, owner);
                                 Ok(owner)
                             }
                             Err(e) => Err(e.into()),
@@ -198,13 +218,13 @@ pub async fn get_data(
                     Ok(owner) => {
                         let position = Position::try_from_positionv0(
                             owner,
-                            pubkey,
-                            position,
-                            d.timestamp,
+                            *pubkey,
+                            position.clone(),
+                            timestamp,
                             voting_mint_config,
                         )
                         .await?;
-                        positions.insert(pubkey, position);
+                        positions.insert(*pubkey, position);
                     }
                 }
             }
@@ -212,9 +232,93 @@ pub async fn get_data(
             println!("No mint found for registrar {}", position.registrar)
         }
     }
+    Ok((positions_raw, positions))
+}
+pub type PositionOwnersMap = HashMap<Pubkey, Pubkey>;
+#[derive(Default)]
+pub struct PositionOwners {
+    pub vehnt: PositionOwnersMap,
+    pub veiot: PositionOwnersMap,
+    pub vemobile: PositionOwnersMap,
+}
 
-    let accounts = get_stake_accounts(rpc_client).await?;
-    let delegated_positions = accounts
+impl PositionOwners {
+    pub fn is_empty(&self) -> bool {
+        self.vehnt.is_empty() && self.veiot.is_empty() && self.vemobile.is_empty()
+    }
+}
+
+pub async fn get_data(
+    rpc_client: &RpcClient,
+    epoch_info: Arc<Vec<epoch_info::EpochSummary>>,
+    position_owners_map: &mut PositionOwners,
+) -> Result<AllPositionsData> {
+    let mut all_data = AllPositionsData::new();
+    let mut d = &mut all_data.vehnt;
+    let positions_data = locked::get_data(rpc_client).await?;
+    // if the map is empty, we assume it hasn't been initialized and so we initialize it
+    if position_owners_map.is_empty() {
+        println!("Initializing position owners map");
+        let client = rpc::Client::default();
+        let position_keys = positions_data.positions.iter().map(|p| &p.1.mint).collect();
+        let owners = rpc::get_all_owners_by_mint(&client, &position_keys, 100).await?;
+        positions_data
+            .positions
+            .iter()
+            .zip(owners.iter())
+            .for_each(|(p, k)| {
+                if let Some(mint) = positions_data.registrar_to_mint.get(&p.1.registrar) {
+                    match mint.to_string().as_ref() {
+                        HNT_MINT => {
+                            position_owners_map.vehnt.insert(p.0, *k);
+                        }
+                        IOT_MINT => {
+                            position_owners_map.veiot.insert(p.0, *k);
+                        }
+                        MOBILE_MINT => {
+                            position_owners_map.vemobile.insert(p.0, *k);
+                        }
+                        _ => println!("Warning: Unknown mint {} for position {}", mint, p.0),
+                    }
+                } else {
+                    println!("Warning: No mint found for registrar {}", p.1.registrar)
+                }
+            });
+    }
+
+    let (_veiot_positions_raw, veiot_positions) = get_positions_of_mint(
+        &positions_data,
+        &mut position_owners_map.veiot,
+        IOT_MINT,
+        d.timestamp,
+    )
+    .await?;
+    println!("veiot_positions: {}", veiot_positions.len());
+    all_data.veiot.positions = veiot_positions.iter().map(|p| p.1.clone()).collect();
+    all_data.veiot.positions_total_len = all_data.veiot.positions.len();
+
+    let (_vemobile_positions_raw, vemobile_positions) = get_positions_of_mint(
+        &positions_data,
+        &mut position_owners_map.vemobile,
+        MOBILE_MINT,
+        d.timestamp,
+    )
+    .await?;
+    println!("vemobile_positions: {}", veiot_positions.len());
+    all_data.vemobile.positions = vemobile_positions.iter().map(|p| p.1.clone()).collect();
+    all_data.vemobile.positions_total_len = all_data.vemobile.positions.len();
+
+    let (vehnt_positions_raw, mut vehnt_positions) = get_positions_of_mint(
+        &positions_data,
+        &mut position_owners_map.vehnt,
+        HNT_MINT,
+        d.timestamp,
+    )
+    .await?;
+
+    // this next section only applies to veHNT since veHNT can delegate towards subDAOs
+    let delegated_positions = get_delegateed_positions(rpc_client).await?;
+    let delegated_positions = delegated_positions
         .iter()
         .map(|(pubkey, account)| {
             let mut data = account.data.as_slice();
@@ -223,10 +327,11 @@ pub async fn get_data(
         .filter(|result| result.is_ok())
         .collect::<AnchorResult<Vec<_>>>()?;
 
+    let voting_mint_config = &positions_data.mint_configs[&Pubkey::from_str(HNT_MINT)?];
     for (pubkey, delegated_position) in delegated_positions {
         let delegated_position = delegated_position;
-        let position_v0 = positions_raw.get(&delegated_position.position);
-        let position = positions.get_mut(&delegated_position.position);
+        let position_v0 = vehnt_positions_raw.get(&delegated_position.position);
+        let position = vehnt_positions.get_mut(&delegated_position.position);
         match (position_v0, position) {
             (Some(position_v0), Some(position)) => {
                 position.delegated = Some(DelegatedPosition::try_from_delegated_position_v0(
@@ -256,9 +361,10 @@ pub async fn get_data(
 
     let mut hnt_amounts = vec![];
     let mut vehnt_amounts = vec![];
-
     let mut lockups = vec![];
-    for (_, position) in positions {
+
+    // stats for veHNT positions
+    for (_, position) in vehnt_positions {
         let duration = (position.end_ts - position.start_ts) as u128;
         d.network.total.hnt += position.hnt_amount;
         d.network.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
@@ -333,7 +439,12 @@ pub async fn get_data(
         hnt_amounts.clone(),
         lockups.clone(),
     );
-    Ok(d)
+    let total_positions = all_data.vehnt.positions_total_len
+        + all_data.vemobile.positions_total_len
+        + all_data.veiot.positions_total_len;
+    println!("Organized data for positions {} positions", total_positions);
+
+    Ok(all_data)
 }
 
 fn get_stats(
@@ -367,7 +478,13 @@ fn get_stats(
 impl Positions {
     pub async fn run(self, rpc_client: RpcClient) -> Result {
         let epoch_summaries = epoch_info::get_epoch_summaries(&rpc_client).await?;
-        let d = get_data(&rpc_client, epoch_summaries.into(), &mut HashMap::new()).await?;
+        let all_data = get_data(
+            &rpc_client,
+            epoch_summaries.into(),
+            &mut PositionOwners::default(),
+        )
+        .await?;
+        let d = all_data.vehnt;
         if self.verify {
             let iot_sub_dao_raw = rpc_client
                 .get_account(&Pubkey::from_str(IOT_SUBDAO).unwrap())
@@ -488,6 +605,7 @@ pub struct Position {
     #[serde(skip_serializing)]
     pub vehnt_info: VehntInfo,
     pub lockup_type: LockupType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated: Option<DelegatedPosition>,
 }
 
