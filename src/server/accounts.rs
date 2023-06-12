@@ -199,30 +199,55 @@ pub async fn get_account(
     }
 }
 
+
+
 #[derive(serde::Serialize)]
-pub struct TopVehntResult {
+struct TopResult {
+    #[serde(skip_serializing)]
+    pub dao: Dao,
     pub pubkey: String,
-    pub positions: Vec<String>,
+    pub positions: Positions,
     #[serde(flatten)]
     pub locked_balances: LockedBalances,
 }
 
-use std::cmp::{Ord, Ordering};
-impl Ord for TopVehntResult {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.locked_balances
-            .vehnt
-            .total
-            .cmp(&other.locked_balances.vehnt.total)
+#[derive(serde::Serialize)]
+struct Positions {
+    vehnt: Vec<String>,
+    veiot: Vec<String>,
+    vemobile: Vec<String>,
+}
+
+impl From<&positions::account::Positions> for Positions {
+    fn from(value: &positions::account::Positions) -> Self {
+        Positions {
+            vehnt: value.vehnt.iter().map(|p| p.to_string()).collect(),
+            veiot: value.veiot.iter().map(|p| p.to_string()).collect(),
+            vemobile: value.vemobile.iter().map(|p| p.to_string()).collect(),
+        }
     }
 }
-impl PartialEq for TopVehntResult {
+
+use std::cmp::{Ord, Ordering};
+impl Ord for TopResult {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.dao {
+            Dao::Hnt=> self.locked_balances.vehnt.total.cmp(
+                &other.locked_balances.vehnt.total),
+            Dao::Mobile => self.locked_balances.vemobile.cmp(
+                &other.locked_balances.vemobile),
+            Dao::Iot => self.locked_balances.veiot.cmp(
+                &other.locked_balances.veiot),
+        }
+    }
+}
+impl PartialEq for TopResult {
     fn eq(&self, other: &Self) -> bool {
         self.pubkey == other.pubkey
     }
 }
-impl Eq for TopVehntResult {}
-impl PartialOrd for TopVehntResult {
+impl Eq for TopResult {}
+impl PartialOrd for TopResult {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -259,19 +284,15 @@ pub async fn get_top_dao_accounts(
     }
     let positions = positions.as_ref().unwrap();
 
-    let mut owners_and_balances: Vec<TopVehntResult> = positions
+    let mut owners_and_balances: Vec<TopResult> = positions
         .positions_by_owner
         .iter()
         .map(|(owner, account)| {
-            let account_positions = match dao {
-                Dao::Hnt => &account.positions.vehnt,
-                Dao::Iot => &account.positions.veiot,
-                Dao::Mobile => &account.positions.vemobile,
-            };
 
-            TopVehntResult {
+            TopResult {
+                dao,
                 pubkey: owner.to_string(),
-                positions: account_positions.iter().map(|p| p.to_string()).collect(),
+                positions: Positions::from(&account.positions),
                 locked_balances: account.balances,
             }
         })
@@ -283,7 +304,6 @@ pub async fn get_top_dao_accounts(
     // test individual serde for each entry
     for owner in &owners_and_balances {
         let serde_str = serde_json::to_string(&owner);
-        println!("{}", owner.pubkey);
         if let Err(e) = serde_str {
             println!("Error serializing owner: {}", e);
             return Err((

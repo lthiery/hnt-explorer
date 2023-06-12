@@ -1,6 +1,6 @@
 use super::positions;
 use super::{accounts::VehntBalance, *};
-pub use crate::cli::positions::{AllPositionsData, LockupType, Position, PositionOwners};
+pub use crate::cli::positions::{AllPositionsData, LockupType, Position, Positions, PositionOwners};
 use crate::types::SubDao;
 use axum::{
     body::{self, Empty, Full},
@@ -13,7 +13,7 @@ use std::ops::DerefMut;
 use std::str::FromStr;
 use tokio::{fs::File, io::AsyncReadExt};
 
-mod account;
+pub mod account;
 pub use account::*;
 
 mod serve_csv;
