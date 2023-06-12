@@ -1,6 +1,6 @@
-use super::super::positions;
+use super::positions;
 use super::{accounts::VehntBalance, *};
-use crate::cli::positions::PositionOwners;
+use crate::cli::positions::{AllPositionsData, PositionOwners, Position, LockupType};
 use crate::types::SubDao;
 use axum::{
     body::{self, Empty, Full},
@@ -30,9 +30,9 @@ pub use timer::get_positions;
 
 #[derive(Debug)]
 pub struct Memory {
-    data: HashMap<i64, Arc<positions::AllPositionsData>>,
-    pub position: HashMap<Pubkey, positions::Position>,
-    pub latest_data: Arc<positions::AllPositionsData>,
+    data: HashMap<i64, Arc<AllPositionsData>>,
+    pub position: HashMap<Pubkey, Position>,
+    pub latest_data: Arc<AllPositionsData>,
     pub positions_by_owner: HashMap<Pubkey, Account>,
 }
 
@@ -78,7 +78,7 @@ impl Memory {
             pub end_ts: i64,
             pub duration_s: i64,
             pub vehnt: u128,
-            pub lockup_type: &'a positions::LockupType,
+            pub lockup_type: &'a LockupType,
             pub delegated_position_key: Option<&'a str>,
             pub delegated_sub_dao: Option<SubDao>,
             pub delagated_last_claimed_epoch: Option<u64>,
@@ -131,14 +131,14 @@ impl Memory {
     async fn pull_latest_data(
         rpc_client: &Arc<RpcClient>,
         epoch_summaries: Arc<Mutex<epoch_info::Memory>>,
-        position_owner_map: &mut positions::PositionOwners,
-    ) -> Result<positions::AllPositionsData> {
+        position_owner_map: &mut PositionOwners,
+    ) -> Result<AllPositionsData> {
         let epoch_summaries = {
             let lock = epoch_summaries.lock().await;
             lock.latest_data.clone()
         };
         let mut latest_data =
-            positions::get_data(rpc_client, epoch_summaries, position_owner_map).await?;
+            crate::cli::positions::get_data(rpc_client, epoch_summaries, position_owner_map).await?;
         latest_data.scale_down();
         Ok(latest_data)
     }

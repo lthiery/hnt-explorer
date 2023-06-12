@@ -1,6 +1,6 @@
-use super::super::epoch_info;
+use super::super::cli::epoch_info::{self, EpochSummary};
 use super::*;
-use crate::cli::epoch_info::EpochSummary;
+//use epoch_info::EpochSummary;
 use chrono::{Datelike, Utc};
 
 #[derive(Debug)]

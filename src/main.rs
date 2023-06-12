@@ -6,6 +6,7 @@ use std::str::FromStr;
 mod cli;
 mod error;
 mod rpc;
+mod server;
 mod types;
 mod utils;
 
