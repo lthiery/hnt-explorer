@@ -38,8 +38,6 @@ pub struct DntBalance {
     locked_amount: u64,
     pending_amount: u64,
     total_amount: u64,
-    mint: String,
-    decimals: u8,
 }
 
 impl DntBalance {
@@ -59,8 +57,6 @@ pub struct HntBalance {
     amount: u64,
     locked_amount: u64,
     total_amount: u64,
-    mint: String,
-    decimals: u8,
 }
 
 #[derive(serde::Serialize, Default, Copy, Clone, Debug)]
@@ -91,8 +87,6 @@ impl From<accounts::Balance> for DntBalance {
             locked_amount: 0,
             pending_amount: 0,
             total_amount: b.amount,
-            mint: b.mint,
-            decimals: b.decimals,
         }
     }
 }
@@ -103,8 +97,6 @@ impl From<accounts::Balance> for HntBalance {
             amount: b.amount,
             locked_amount: 0,
             total_amount: b.amount,
-            mint: b.mint,
-            decimals: b.decimals,
         }
     }
 }
