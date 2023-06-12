@@ -199,8 +199,6 @@ pub async fn get_account(
     }
 }
 
-
-
 #[derive(serde::Serialize)]
 struct TopResult {
     #[serde(skip_serializing)]
@@ -232,12 +230,16 @@ use std::cmp::{Ord, Ordering};
 impl Ord for TopResult {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.dao {
-            Dao::Hnt=> self.locked_balances.vehnt.total.cmp(
-                &other.locked_balances.vehnt.total),
-            Dao::Mobile => self.locked_balances.vemobile.cmp(
-                &other.locked_balances.vemobile),
-            Dao::Iot => self.locked_balances.veiot.cmp(
-                &other.locked_balances.veiot),
+            Dao::Hnt => self
+                .locked_balances
+                .vehnt
+                .total
+                .cmp(&other.locked_balances.vehnt.total),
+            Dao::Mobile => self
+                .locked_balances
+                .vemobile
+                .cmp(&other.locked_balances.vemobile),
+            Dao::Iot => self.locked_balances.veiot.cmp(&other.locked_balances.veiot),
         }
     }
 }
@@ -287,31 +289,16 @@ pub async fn get_top_dao_accounts(
     let mut owners_and_balances: Vec<TopResult> = positions
         .positions_by_owner
         .iter()
-        .map(|(owner, account)| {
-
-            TopResult {
-                dao,
-                pubkey: owner.to_string(),
-                positions: Positions::from(&account.positions),
-                locked_balances: account.balances,
-            }
+        .map(|(owner, account)| TopResult {
+            dao,
+            pubkey: owner.to_string(),
+            positions: Positions::from(&account.positions),
+            locked_balances: account.balances,
         })
         .collect();
     owners_and_balances.sort();
     owners_and_balances.reverse();
     owners_and_balances.truncate(100);
-
-    // test individual serde for each entry
-    for owner in &owners_and_balances {
-        let serde_str = serde_json::to_string(&owner);
-        if let Err(e) = serde_str {
-            println!("Error serializing owner: {}", e);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Error serializing owner".to_string(),
-            ));
-        }
-    }
 
     Ok(response::Json(json!({
         "top": owners_and_balances,

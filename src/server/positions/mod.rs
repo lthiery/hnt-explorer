@@ -1,6 +1,8 @@
 use super::positions;
 use super::{accounts::VehntBalance, *};
-pub use crate::cli::positions::{AllPositionsData, LockupType, Position, Positions, PositionOwners};
+pub use crate::cli::positions::{
+    AllPositionsData, LockupType, Position, PositionOwners, Positions,
+};
 use crate::types::SubDao;
 use axum::{
     body::{self, Empty, Full},
@@ -313,7 +315,6 @@ async fn positions(
     }?;
 
     let start = query.start.map_or(0, |start| start);
-    println!("start: {}", start);
     if start > data.positions.len() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -327,10 +328,6 @@ async fn positions(
     let limit = query.limit.map_or(DEFAULT_LIMIT, |limit| {
         limit.min(DEFAULT_LIMIT).min(max_data)
     });
-    println!(
-        "max_data: {max_data}, data.positions.len(): {}, limit = {limit}",
-        data.positions.len()
-    );
 
     let mut positions = Vec::with_capacity(limit);
     positions.resize(limit, Position::default());
