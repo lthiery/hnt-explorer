@@ -4,7 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
 use crate::cli::accounts::{self, HeliumBalances};
-use crate::cli::server::positions::LockedBalances;
+use crate::server::positions::LockedBalances;
 
 #[derive(serde::Serialize)]
 pub struct Balances {

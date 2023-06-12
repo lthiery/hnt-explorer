@@ -9,12 +9,11 @@ use solana_client::{
 };
 use solana_sdk::pubkey::Pubkey;
 
-mod accounts;
-mod epoch_info;
-mod locked;
-mod positions;
-mod server;
-mod supply;
+pub mod accounts;
+pub mod epoch_info;
+pub mod locked;
+pub mod positions;
+pub mod supply;
 
 #[derive(Debug, clap::Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"))]
