@@ -25,14 +25,17 @@ Provides balances of HNT, MOBILE, and IOT. This endpoint is aware of positions a
 "locked" and "pending" amounts for balances. This endpoint is not aware of pending hotspot rewards (nor does it list
 hotspot NFTs).
 
-GET [`/v1/accounts/vehnt/top`](https://hnt-explorer.herokuapp.com/v1/accounts/vehnt/top)
-Provides the a list of the top 100 accounts in veHNT holdings.
+GET [`/v1/accounts/vehnt/{dao}/top`](https://hnt-explorer.herokuapp.com/v1/accounts/vehnt/top)
+Provides a list of the top 100 accounts in DAO voting weight. Possible DAO values are `vehnt`, `veiot` and `vemobile`.
 
-GET [`/v1/positions`](https://hnt-explorer.herokuapp.com/v1/positions)
+GET [`/v1/positions/{dao}`](https://hnt-explorer.herokuapp.com/v1/positions/vehnt)
 
 Params: `limit`, `start`, `timestamp`
 
-Provides list of all positions. When no timestamp is provided, the latest pulled data is used, including timestamp.
+Provides list of all positions for a given DAO. Possible DAO values are `vehnt`, `veiot` and `vemobile`.
+
+When no timestamp is provided, the latest pulled data is used, including timestamp. 
+
 Data is pulled every 5 minutes. Use the timestamp to maintain index on the same batch of data and start and limit to
 fetch more positions.
 
@@ -43,18 +46,21 @@ When no start is provided, default of 0 is used.
 If using more than one parameter at a time, all parameters must be encapsulated in a string. For example:
 
 ```
-https://hnt-explorer.herokuapp.com/v1/positions?"timestamp=1682720623?start=500"
+https://hnt-explorer.herokuapp.com/v1/positions/vehnt?"timestamp=1682720623?start=500"
 ```
 
-GET `/v1/positions/{position}`
+GET `/v1/positions/{dao}/{position}`
 
-Provides data of a specific position, including most recently derived veHNT (at most 5 minutes old) and pending rewards.
+Provides data of a specific position from a specific DAO, including most recently derived voting weight (at most 5 
+minutes old). Shows pending rewards for veHNT positions.
 
-GET [`/v1/positions/csv`](https://hnt-explorer.herokuapp.com/v1/positions/csv)
+GET [`/v1/positions/vehnt/csv`](https://hnt-explorer.herokuapp.com/v1/positions/csv)
 
-Serves most recent list of all positions as a CSV file.
+Serves most recent list of all veHNT positions as a CSV file.
 
-GET [`/v1/positions/info`](https://hnt-explorer.herokuapp.com/v1/delegated_stakes/info)
+GET [`/v1/positions/vehnt/metadata`](https://hnt-explorer.herokuapp.com/v1/positions/vehnt/metadata)
+
+Provides information about veHNT positions, such as total HNT amount, avg/median per position, avg/median duration, etc.
 
 GET [`/v1/epoch/info`](https://hnt-explorer.herokuapp.com/v1/epoch/info)
 
