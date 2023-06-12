@@ -52,31 +52,29 @@ async fn get_accounts_with_prefix(
 }
 
 #[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct VeHntPositionData {
+pub struct DaoPositionData {
     pub timestamp: i64,
     pub positions: Vec<Position>,
+    pub positions_total_len: usize,
     #[serde(skip_serializing)]
     pub delegated_positions: Vec<PositionLegacy>,
-    pub positions_total_len: usize,
-    pub network: Data,
-    pub undelegated: Data,
-    pub mobile: Data,
-    pub iot: Data,
-}
-
-#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DntPositionData {
-    pub timestamp: i64,
-    pub positions: Vec<Position>,
-    #[serde(skip_serializing)]
-    pub positions_total_len: usize,
 }
 
 #[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AllPositionsData {
-    pub vehnt: VeHntPositionData,
-    pub vemobile: DntPositionData,
-    pub veiot: DntPositionData,
+    pub stats: Metadata,
+    pub vehnt: DaoPositionData,
+    pub vemobile: DaoPositionData,
+    pub veiot: DaoPositionData,
+}
+
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Metadata {
+    pub timestamp: i64,
+    pub network: Data,
+    pub undelegated: Data,
+    pub mobile: Data,
+    pub iot: Data,
 }
 
 #[derive(Default, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -150,18 +148,19 @@ impl AllPositionsData {
     pub fn new() -> Self {
         let curr_ts = Utc::now().timestamp();
         Self {
-            vehnt: VeHntPositionData::new(curr_ts),
-            vemobile: DntPositionData::new(curr_ts),
-            veiot: DntPositionData::new(curr_ts),
+            stats: Metadata::new(curr_ts),
+            vehnt: DaoPositionData::new(curr_ts),
+            vemobile: DaoPositionData::new(curr_ts),
+            veiot: DaoPositionData::new(curr_ts),
         }
     }
 
     pub fn scale_down(&mut self) {
-        self.vehnt.scale_down();
+        self.stats.scale_down();
     }
 }
 
-impl VeHntPositionData {
+impl Metadata {
     pub fn new(timestamp: i64) -> Self {
         Self {
             timestamp,
@@ -177,7 +176,7 @@ impl VeHntPositionData {
     }
 }
 
-impl DntPositionData {
+impl DaoPositionData {
     pub fn new(timestamp: i64) -> Self {
         Self {
             timestamp,
@@ -255,6 +254,8 @@ pub async fn get_data(
 ) -> Result<AllPositionsData> {
     let mut all_data = AllPositionsData::new();
     let mut d = &mut all_data.vehnt;
+    let mut s = &mut all_data.stats;
+
     let positions_data = locked::get_data(rpc_client).await?;
     // if the map is empty, we assume it hasn't been initialized and so we initialize it
     if position_owners_map.is_empty() {
@@ -293,9 +294,15 @@ pub async fn get_data(
         d.timestamp,
     )
     .await?;
-    println!("veiot_positions: {}", veiot_positions.len());
-    all_data.veiot.positions = veiot_positions.iter().map(|p| p.1.clone()).collect();
+    all_data.veiot.positions = veiot_positions
+        .into_values()
+        .map(|mut p| {
+            p.voting_weight /= PRECISION_FACTOR;
+            p
+        })
+        .collect();
     all_data.veiot.positions_total_len = all_data.veiot.positions.len();
+    println!("veiot positions: {}", all_data.veiot.positions.len());
 
     let (_vemobile_positions_raw, vemobile_positions) = get_positions_of_mint(
         &positions_data,
@@ -304,9 +311,15 @@ pub async fn get_data(
         d.timestamp,
     )
     .await?;
-    println!("vemobile_positions: {}", veiot_positions.len());
-    all_data.vemobile.positions = vemobile_positions.iter().map(|p| p.1.clone()).collect();
+    all_data.vemobile.positions = vemobile_positions
+        .into_values()
+        .map(|mut p| {
+            p.voting_weight /= PRECISION_FACTOR;
+            p
+        })
+        .collect();
     all_data.vemobile.positions_total_len = all_data.vemobile.positions.len();
+    println!("vemobile positions: {}", all_data.vemobile.positions.len());
 
     let (vehnt_positions_raw, mut vehnt_positions) = get_positions_of_mint(
         &positions_data,
@@ -366,75 +379,75 @@ pub async fn get_data(
     // stats for veHNT positions
     for (_, position) in vehnt_positions {
         let duration = (position.end_ts - position.start_ts) as u128;
-        d.network.total.hnt += position.hnt_amount;
-        d.network.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
-        d.network.total.vehnt += position.vehnt;
-        d.network.total.count += 1;
-        d.network.total.lockup += duration;
+        s.network.total.hnt += position.locked_tokens;
+        s.network.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+        s.network.total.vehnt += position.voting_weight;
+        s.network.total.count += 1;
+        s.network.total.lockup += duration;
 
         if let Some(delegated) = &position.delegated {
-            hnt_amounts.push((position.hnt_amount, delegated.sub_dao));
-            vehnt_amounts.push((position.vehnt, delegated.sub_dao));
+            hnt_amounts.push((position.locked_tokens, delegated.sub_dao));
+            vehnt_amounts.push((position.voting_weight, delegated.sub_dao));
             lockups.push((duration, delegated.sub_dao));
             match delegated.sub_dao {
                 SubDao::Mobile => {
-                    d.mobile.total.hnt += position.hnt_amount;
-                    d.mobile.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
-                    d.mobile.total.vehnt += position.vehnt;
-                    d.mobile.total.count += 1;
-                    d.mobile.total.lockup += duration;
+                    s.mobile.total.hnt += position.locked_tokens;
+                    s.mobile.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+                    s.mobile.total.vehnt += position.voting_weight;
+                    s.mobile.total.count += 1;
+                    s.mobile.total.lockup += duration;
                 }
                 SubDao::Iot => {
-                    d.iot.total.hnt += position.hnt_amount;
-                    d.iot.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
-                    d.iot.total.vehnt += position.vehnt;
-                    d.iot.total.count += 1;
-                    d.iot.total.lockup += duration;
+                    s.iot.total.hnt += position.locked_tokens;
+                    s.iot.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+                    s.iot.total.vehnt += position.voting_weight;
+                    s.iot.total.count += 1;
+                    s.iot.total.lockup += duration;
                 }
                 SubDao::Unknown => {
                     return Err(Error::Custom("Unknown subdao"));
                 }
             }
         } else {
-            hnt_amounts.push((position.hnt_amount, SubDao::Unknown));
-            vehnt_amounts.push((position.vehnt, SubDao::Unknown));
+            hnt_amounts.push((position.locked_tokens, SubDao::Unknown));
+            vehnt_amounts.push((position.voting_weight, SubDao::Unknown));
             lockups.push((duration, SubDao::Unknown));
-            d.undelegated.total.hnt += position.hnt_amount;
-            d.undelegated.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
-            d.undelegated.total.vehnt += position.vehnt;
-            d.undelegated.total.count += 1;
-            d.undelegated.total.lockup += duration;
+            s.undelegated.total.hnt += position.locked_tokens;
+            s.undelegated.total.fall_rate += position.vehnt_info.pre_genesis_end_fall_rate;
+            s.undelegated.total.vehnt += position.voting_weight;
+            s.undelegated.total.count += 1;
+            s.undelegated.total.lockup += duration;
         }
         let mut position_copy = position.clone();
-        position_copy.vehnt /= PRECISION_FACTOR;
+        position_copy.voting_weight /= PRECISION_FACTOR;
         d.positions.push(position_copy);
     }
     d.positions_total_len = d.positions.len();
 
-    d.network.stats = get_stats(
+    s.network.stats = get_stats(
         None,
-        d.network.total,
+        s.network.total,
         vehnt_amounts.clone(),
         hnt_amounts.clone(),
         lockups.clone(),
     );
-    d.iot.stats = get_stats(
+    s.iot.stats = get_stats(
         Some(SubDao::Iot),
-        d.iot.total,
+        s.iot.total,
         vehnt_amounts.clone(),
         hnt_amounts.clone(),
         lockups.clone(),
     );
-    d.mobile.stats = get_stats(
+    s.mobile.stats = get_stats(
         Some(SubDao::Mobile),
-        d.mobile.total,
+        s.mobile.total,
         vehnt_amounts.clone(),
         hnt_amounts.clone(),
         lockups.clone(),
     );
-    d.undelegated.stats = get_stats(
+    s.undelegated.stats = get_stats(
         Some(SubDao::Unknown),
-        d.undelegated.total,
+        s.undelegated.total,
         vehnt_amounts.clone(),
         hnt_amounts.clone(),
         lockups.clone(),
@@ -485,6 +498,8 @@ impl Positions {
         )
         .await?;
         let d = all_data.vehnt;
+        let s = all_data.stats;
+
         if self.verify {
             let iot_sub_dao_raw = rpc_client
                 .get_account(&Pubkey::from_str(IOT_SUBDAO).unwrap())
@@ -505,80 +520,80 @@ impl Positions {
                 + iot_sub_dao.vehnt_fall_rate
                     * u128::try_from(d.timestamp - iot_sub_dao.vehnt_last_calculated_ts).unwrap();
 
-            println!("Total MOBILE veHNT : {}", d.mobile.total.vehnt);
+            println!("Total MOBILE veHNT : {}", s.mobile.total.vehnt);
             println!("Est MOBILE veHNT   : {}", mobile_vehnt_est);
             println!(
                 "MOBILE veHNT Diff  : {}",
                 i128::try_from(mobile_vehnt_est).unwrap()
-                    - i128::try_from(d.mobile.total.vehnt).unwrap()
+                    - i128::try_from(s.mobile.total.vehnt).unwrap()
             );
-            println!("Total IOT veHNT    : {}", d.iot.total.vehnt);
+            println!("Total IOT veHNT    : {}", s.iot.total.vehnt);
             println!("Est IOT veHNT      : {}", iot_vehnt_est);
             println!(
                 "IOT veHNT Diff     : {}",
-                i128::try_from(iot_vehnt_est).unwrap() - i128::try_from(d.iot.total.vehnt).unwrap()
+                i128::try_from(iot_vehnt_est).unwrap() - i128::try_from(s.iot.total.vehnt).unwrap()
             );
-            println!("Total veHNT        : {}", d.network.total.vehnt);
-            println!("mobile fall        : {}", d.mobile.total.fall_rate);
+            println!("Total veHNT        : {}", s.network.total.vehnt);
+            println!("mobile fall        : {}", s.mobile.total.fall_rate);
             println!("mobile est fall    : {}", mobile_sub_dao.vehnt_fall_rate);
             println!(
                 "mobile diff        : {}",
                 i128::try_from(mobile_sub_dao.vehnt_fall_rate).unwrap()
-                    - i128::try_from(d.mobile.total.fall_rate).unwrap()
+                    - i128::try_from(s.mobile.total.fall_rate).unwrap()
             );
-            println!("iot fall           : {}", d.iot.total.fall_rate);
+            println!("iot fall           : {}", s.iot.total.fall_rate);
             println!("iot est fall       : {}", iot_sub_dao.vehnt_fall_rate);
             println!(
                 "iot diff           : {}",
                 i128::try_from(iot_sub_dao.vehnt_fall_rate).unwrap()
-                    - i128::try_from(d.iot.total.fall_rate).unwrap()
+                    - i128::try_from(s.iot.total.fall_rate).unwrap()
             );
         } else {
-            let delegated_hnt = d.mobile.total.vehnt + d.iot.total.vehnt;
-            let undelegated_hnt = d.network.total.vehnt - delegated_hnt;
+            let delegated_hnt = s.mobile.total.vehnt + s.iot.total.vehnt;
+            let undelegated_hnt = s.network.total.vehnt - delegated_hnt;
             println!(
                 "Total MOBILE veHNT     :   {} ({}% of delegated)",
-                format_vehnt(d.mobile.total.vehnt),
-                percentage(d.mobile.total.vehnt, delegated_hnt)
+                format_vehnt(s.mobile.total.vehnt),
+                percentage(s.mobile.total.vehnt, delegated_hnt)
             );
             println!(
                 "Total IOT veHNT        : {} ({}% of delegated)",
-                format_vehnt(d.iot.total.vehnt),
-                percentage(d.iot.total.vehnt, delegated_hnt)
+                format_vehnt(s.iot.total.vehnt),
+                percentage(s.iot.total.vehnt, delegated_hnt)
             );
             println!(
                 "Total undelegated veHNT:   {} ({}% of total)",
                 format_vehnt(undelegated_hnt),
-                percentage(undelegated_hnt, d.network.total.vehnt)
+                percentage(undelegated_hnt, s.network.total.vehnt)
             );
             println!(
                 "Total veHNT            : {}",
-                format_vehnt(d.network.total.vehnt)
+                format_vehnt(s.network.total.vehnt)
             );
         }
         println!("Total positions        :         {}", d.positions_total_len);
 
         println!(
             "Total HNT locked       :    {}",
-            format_hnt(d.network.total.hnt)
+            format_hnt(s.network.total.hnt)
         );
         println!(
             "Average multiple       :         {}",
-            (d.network.total.vehnt / ANOTHER_DIVIDER) as u64
-                / (d.network.total.hnt / TOKEN_DIVIDER as u64)
+            (s.network.total.vehnt / ANOTHER_DIVIDER) as u64
+                / (s.network.total.hnt / TOKEN_DIVIDER as u64)
         );
         println!(
             "Average veHNT size     :      {}",
-            format_vehnt(d.network.stats.avg_vehnt)
+            format_vehnt(s.network.stats.avg_vehnt)
         );
         println!(
             "Median veHNT size      :      {}",
-            format_vehnt(d.network.stats.median_vehnt)
+            format_vehnt(s.network.stats.median_vehnt)
         );
 
-        println!("Network {}", d.network);
-        println!("MOBILE {}", d.mobile);
-        println!("IOT {}", d.iot);
+        println!("Network {}", s.network);
+        println!("MOBILE {}", s.mobile);
+        println!("IOT {}", s.iot);
 
         Ok(())
     }
@@ -596,12 +611,12 @@ pub struct Position {
     pub owner: String,
     pub mint: String,
     pub position_key: String,
-    pub hnt_amount: u64,
+    pub locked_tokens: u64,
     pub start_ts: i64,
     pub genesis_end_ts: i64,
     pub end_ts: i64,
     pub duration_s: i64,
-    pub vehnt: u128,
+    pub voting_weight: u128,
     #[serde(skip_serializing)]
     pub vehnt_info: VehntInfo,
     pub lockup_type: LockupType,
@@ -633,12 +648,12 @@ impl From<Position> for PositionLegacy {
             delegated_position_key: delegated.delegated_position_key,
             last_claimed_epoch: delegated.last_claimed_epoch,
             sub_dao: delegated.sub_dao,
-            hnt_amount: Hnt::from(value.hnt_amount),
+            hnt_amount: Hnt::from(value.locked_tokens),
             start_ts: value.start_ts,
             genesis_end_ts: value.genesis_end_ts,
             end_ts: value.end_ts,
             duration_s: value.duration_s,
-            vehnt: value.vehnt / PRECISION_FACTOR,
+            vehnt: value.voting_weight / PRECISION_FACTOR,
             lockup_type: value.lockup_type,
             purged: false,
         }
@@ -736,12 +751,12 @@ impl Position {
             owner: owner.to_string(),
             position_key: position_key.to_string(),
             mint: position.mint.to_string(),
-            hnt_amount: position.amount_deposited_native,
+            locked_tokens: position.amount_deposited_native,
             start_ts: position.lockup.start_ts,
             end_ts: position.lockup.end_ts,
             genesis_end_ts: position.genesis_end,
             duration_s: position.lockup.end_ts - position.lockup.start_ts,
-            vehnt,
+            voting_weight: vehnt,
             vehnt_info: vehnt_info.into(),
             delegated: None,
             lockup_type: match position.lockup.kind {

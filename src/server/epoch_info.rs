@@ -59,9 +59,9 @@ pub async fn get(
         }
         let stakes_memory = stakes_memory.as_ref().unwrap();
         (
-            stakes_memory.latest_data.vehnt.mobile.total.vehnt,
-            stakes_memory.latest_data.vehnt.iot.total.vehnt,
-            stakes_memory.latest_data.vehnt.timestamp,
+            stakes_memory.latest_data.stats.mobile.total.vehnt,
+            stakes_memory.latest_data.stats.iot.total.vehnt,
+            stakes_memory.latest_data.stats.timestamp,
         )
     };
     let mut data: Vec<EpochSummary> = {

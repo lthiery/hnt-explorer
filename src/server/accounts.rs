@@ -4,7 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
 use crate::cli::accounts::{self, HeliumBalances};
-use crate::server::positions::LockedBalances;
+use crate::server::positions::{Dao, LockedBalances};
 
 #[derive(serde::Serialize)]
 pub struct Balances {
@@ -12,21 +12,30 @@ pub struct Balances {
     hnt: HntBalance,
     iot: DntBalance,
     mobile: DntBalance,
+    veiot: u128,
+    vemobile: u128,
 }
 
 impl Balances {
     pub fn absorb_position_balances(&mut self, locked_balances: LockedBalances) {
         self.vehnt = locked_balances.vehnt;
+        self.veiot = locked_balances.veiot;
+        self.vemobile = locked_balances.vemobile;
+
         self.hnt.locked_amount = locked_balances.locked_hnt;
         self.hnt.total_amount += locked_balances.locked_hnt;
         self.iot.absorb_pending_amount(locked_balances.pending_iot);
+        self.iot.absorb_locked_amount(locked_balances.locked_iot);
         self.mobile
             .absorb_pending_amount(locked_balances.pending_mobile);
+        self.mobile
+            .absorb_locked_amount(locked_balances.locked_mobile);
     }
 }
 #[derive(serde::Serialize)]
 pub struct DntBalance {
     amount: u64,
+    locked_amount: u64,
     pending_amount: u64,
     total_amount: u64,
     mint: String,
@@ -34,9 +43,14 @@ pub struct DntBalance {
 }
 
 impl DntBalance {
-    pub fn absorb_pending_amount(&mut self, pending: u64) {
-        self.total_amount += pending;
-        self.pending_amount = pending;
+    pub fn absorb_pending_amount(&mut self, locked: u64) {
+        self.total_amount += locked;
+        self.pending_amount = locked;
+    }
+
+    pub fn absorb_locked_amount(&mut self, locked: u64) {
+        self.total_amount += locked;
+        self.locked_amount = locked;
     }
 }
 
@@ -64,6 +78,8 @@ impl From<HeliumBalances> for Balances {
             hnt: HntBalance::from(value.hnt),
             iot: DntBalance::from(value.iot),
             mobile: DntBalance::from(value.mobile),
+            veiot: 0,
+            vemobile: 0,
         }
     }
 }
@@ -72,6 +88,7 @@ impl From<accounts::Balance> for DntBalance {
     fn from(b: accounts::Balance) -> Self {
         Self {
             amount: b.amount,
+            locked_amount: 0,
             pending_amount: 0,
             total_amount: b.amount,
             mint: b.mint,
@@ -117,19 +134,52 @@ pub async fn get_account(
                 }
                 let positions = positions.as_ref().unwrap();
 
+                #[derive(serde::Serialize, Default)]
+                pub struct Positions<'a> {
+                    vehnt: Vec<&'a positions::Position>,
+                    vemobile: Vec<&'a positions::Position>,
+                    veiot: Vec<&'a positions::Position>,
+                }
+
                 if let Some(account) = positions.positions_by_owner.get(&pubkey) {
                     balances.absorb_position_balances(account.balances);
-                    let mut list_of_positions = Vec::new();
-                    for p in account.positions.iter() {
-                        match positions.position.get(p) {
-                            None => {
-                                let error = format!("Expected to find position {p} for account {pubkey} but none found!");
-                                println!("{error}");
-                                return Err((StatusCode::INTERNAL_SERVER_ERROR, error));
+
+                    fn position_keys_to_positions<'a>(
+                        account: &Pubkey,
+                        account_positions: &Vec<Pubkey>,
+                        positions: &'a HashMap<Pubkey, positions::Position>,
+                    ) -> std::result::Result<Vec<&'a positions::Position>, (StatusCode, String)>
+                    {
+                        let mut list_of_positions: Vec<&'a positions::Position> = Vec::new();
+                        for p in account_positions {
+                            match positions.get(p) {
+                                None => {
+                                    let error = format!("Expected to find position {p} for account {account} but none found!");
+                                    println!("{error}");
+                                    return Err((StatusCode::INTERNAL_SERVER_ERROR, error));
+                                }
+                                Some(p) => list_of_positions.push(p),
                             }
-                            Some(p) => list_of_positions.push(p),
                         }
+                        Ok(list_of_positions)
                     }
+                    let list_of_positions = Positions {
+                        vehnt: position_keys_to_positions(
+                            &pubkey,
+                            &account.positions.vehnt,
+                            &positions.vehnt_positions,
+                        )?,
+                        veiot: position_keys_to_positions(
+                            &pubkey,
+                            &account.positions.veiot,
+                            &positions.veiot_positions,
+                        )?,
+                        vemobile: position_keys_to_positions(
+                            &pubkey,
+                            &account.positions.vemobile,
+                            &positions.vemobile_positions,
+                        )?,
+                    };
                     Ok(response::Json(json!({
                         "balances": balances,
                         "positions": list_of_positions,
@@ -179,7 +229,26 @@ impl PartialOrd for TopVehntResult {
 }
 
 pub async fn get_top_vehnt_accounts(
+    positions: Extension<Arc<Mutex<Option<positions::Memory>>>>,
+) -> HandlerResult {
+    get_top_dao_accounts(positions, Dao::Hnt).await
+}
+
+pub async fn get_top_vemobile_accounts(
+    positions: Extension<Arc<Mutex<Option<positions::Memory>>>>,
+) -> HandlerResult {
+    get_top_dao_accounts(positions, Dao::Mobile).await
+}
+
+pub async fn get_top_veiot_accounts(
+    positions: Extension<Arc<Mutex<Option<positions::Memory>>>>,
+) -> HandlerResult {
+    get_top_dao_accounts(positions, Dao::Iot).await
+}
+
+pub async fn get_top_dao_accounts(
     Extension(positions): Extension<Arc<Mutex<Option<positions::Memory>>>>,
+    dao: Dao,
 ) -> HandlerResult {
     let positions = positions.lock().await;
     if positions.is_none() {
@@ -189,17 +258,41 @@ pub async fn get_top_vehnt_accounts(
         ));
     }
     let positions = positions.as_ref().unwrap();
-    let positions_by_owner = positions.positions_by_owner.iter();
-    let mut owners_and_balances: Vec<TopVehntResult> = positions_by_owner
-        .map(|(owner, account)| TopVehntResult {
-            pubkey: owner.to_string(),
-            positions: account.positions.iter().map(|p| p.to_string()).collect(),
-            locked_balances: account.balances,
+
+    let mut owners_and_balances: Vec<TopVehntResult> = positions
+        .positions_by_owner
+        .iter()
+        .map(|(owner, account)| {
+            let account_positions = match dao {
+                Dao::Hnt => &account.positions.vehnt,
+                Dao::Iot => &account.positions.veiot,
+                Dao::Mobile => &account.positions.vemobile,
+            };
+
+            TopVehntResult {
+                pubkey: owner.to_string(),
+                positions: account_positions.iter().map(|p| p.to_string()).collect(),
+                locked_balances: account.balances,
+            }
         })
         .collect();
     owners_and_balances.sort();
     owners_and_balances.reverse();
     owners_and_balances.truncate(100);
+
+    // test individual serde for each entry
+    for owner in &owners_and_balances {
+        let serde_str = serde_json::to_string(&owner);
+        println!("{}", owner.pubkey);
+        if let Err(e) = serde_str {
+            println!("Error serializing owner: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error serializing owner".to_string(),
+            ));
+        }
+    }
+
     Ok(response::Json(json!({
         "top": owners_and_balances,
     })))

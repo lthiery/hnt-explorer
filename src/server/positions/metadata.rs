@@ -1,12 +1,11 @@
 use super::*;
-use crate::cli::positions;
 
 #[derive(Debug, Deserialize)]
 pub struct StatsParams {
     timestamp: Option<i64>,
 }
 
-pub async fn vehnt_positions_stats(
+pub async fn vehnt_positions_metadata(
     Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
     query: Query<StatsParams>,
 ) -> HandlerResult {
@@ -35,22 +34,5 @@ pub async fn vehnt_positions_stats(
         }
     }?;
 
-    #[derive(Default, Debug, serde::Serialize)]
-    pub struct Stats {
-        pub timestamp: i64,
-        pub network: positions::Data,
-        pub mobile: positions::Data,
-        pub iot: positions::Data,
-        pub undelegated: positions::Data,
-    }
-
-    let data = Stats {
-        timestamp: data.vehnt.timestamp,
-        network: data.vehnt.network,
-        mobile: data.vehnt.mobile,
-        iot: data.vehnt.iot,
-        undelegated: data.vehnt.undelegated,
-    };
-
-    Ok(response::Json(json!(data)))
+    Ok(response::Json(json!(data.stats)))
 }

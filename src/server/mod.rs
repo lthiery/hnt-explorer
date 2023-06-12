@@ -51,6 +51,14 @@ impl Server {
                 "/v1/accounts/vehnt/top",
                 get(accounts::get_top_vehnt_accounts),
             )
+            .route(
+                "/v1/accounts/veiot/top",
+                get(accounts::get_top_veiot_accounts),
+            )
+            .route(
+                "/v1/accounts/vemobile/top",
+                get(accounts::get_top_vemobile_accounts),
+            )
             .route("/v1/delegated_stakes", get(positions::delegated_stakes))
             .route(
                 "/v1/delegated_stakes/csv",
@@ -58,19 +66,32 @@ impl Server {
             )
             .route(
                 "/v1/delegated_stakes/info",
-                get(positions::vehnt_positions_stats),
+                get(positions::vehnt_positions_metadata),
             )
             .route("/v1/positions", get(positions::vehnt_positions))
             .route("/v1/positions/:position", get(positions::vehnt_position))
-            .route("/v1/positions/info", get(positions::vehnt_positions_stats))
+            .route(
+                "/v1/positions/info",
+                get(positions::vehnt_positions_metadata),
+            )
             .route("/v1/positions/vehnt", get(positions::vehnt_positions))
             .route(
                 "/v1/positions/vehnt/:position",
                 get(positions::vehnt_position),
             )
             .route(
-                "/v1/positions/vehnt/stats",
-                get(positions::vehnt_positions_stats),
+                "/v1/positions/vehnt/metadata",
+                get(positions::vehnt_positions_metadata),
+            )
+            .route("/v1/positions/veiot", get(positions::veiot_positions))
+            .route(
+                "/v1/positions/veiot/:position",
+                get(positions::veiot_position),
+            )
+            .route("/v1/positions/vemobile", get(positions::vemobile_positions))
+            .route(
+                "/v1/positions/vemobile/:position",
+                get(positions::vemobile_position),
             )
             .route(
                 "/v1/positions/csv",
