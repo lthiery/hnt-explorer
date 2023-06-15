@@ -1,35 +1,49 @@
 [package]
-name = "hnt-explorer"
+name = "hnt-explorer-api"
 version = "0.1.0"
 edition = "2021"
+
+[lib]
+name = "hnt_explorer_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hnt-explorer-api"
+path = "src/main.rs"
+required-features = ["ingest"]
 
 [dependencies]
 anchor-lang = "*"
 axum = { version = "0", features = ["query"] }
-base64 = "0"
+base64 = "0.21"
 chrono = "0"
 csv = "*"
 clap = { version = "4", features = ["derive"]}
 futures = "0"
 helium-crypto = {version = "0.6.3", features = ["solana"] }
 reqwest = { version = "0", default-features = false, features = ["rustls-tls", "json"]}
-helium-sub-daos = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
-fanout = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
-voter-stake-registry = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
+helium-sub-daos = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] , optional = true}
+fanout = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] , optional = true}
+voter-stake-registry = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] , optional = true}
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 json = "*"
 lazy_static = "1"
 rand = "0.8"
-solana-account-decoder = "1.14.10"
-solana-client = "1.14.10"
-solana-sdk = "1.14.10"
-solana-program = "1.14.10"
-spl-associated-token-account = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library", features = [ "no-entrypoint" ] }
-spl-token-client = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library" }
-spl-token-2022 = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library" }
-tokio ={ version = "1", features = ["fs"] }
+solana-account-decoder =  { version = "1.14.10", optional = true }
+solana-client =  { version = "1.14.10", optional = true }
+solana-sdk =  { version = "1.14.10", optional = true }
+solana-program =  { version = "1.14.10", optional = true }
+spl-associated-token-account = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library", features = [ "no-entrypoint" ] , optional = true }
+spl-token-client = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library", optional = true  }
+spl-token-2022 = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library" , optional = true }
+tokio ={ version = "1", features = ["fs"], optional = true }
 thiserror = "1"
 helium-api = "3"
 mime_guess = "2"
 rust_decimal = { version = "1" }
+
+
+[features]
+ingest = ["tokio", "spl-associated-token-account", "spl-token-client", "spl-token-2022", "helium-sub-daos",
+    "voter-stake-registry", "fanout", "solana-client", "solana-program", "solana-account-decoder", "solana-sdk"]

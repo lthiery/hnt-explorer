@@ -2,6 +2,8 @@ use super::*;
 use rust_decimal::prelude::ToPrimitive;
 use std::{collections::HashMap, sync::Arc};
 
+pub use models::{SubDao, Position, PositionData, DelegatedPosition, LockupType, VehntInfo};
+
 #[derive(Debug, Clone, clap::Args)]
 /// Fetches all delegated positions and total HNT, veHNT, and subDAO delegations.
 pub struct Positions {
@@ -607,24 +609,6 @@ fn percentage(dao_vhnt: u128, total_vhnt: u128) -> String {
 use helium_api::models::Hnt;
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
-pub struct Position {
-    pub owner: String,
-    pub mint: String,
-    pub position_key: String,
-    pub locked_tokens: u64,
-    pub start_ts: i64,
-    pub genesis_end_ts: i64,
-    pub end_ts: i64,
-    pub duration_s: i64,
-    pub voting_weight: u128,
-    #[serde(skip_serializing)]
-    pub vehnt_info: VehntInfo,
-    pub lockup_type: LockupType,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delegated: Option<DelegatedPosition>,
-}
-
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PositionLegacy {
     pub position_key: String,
     pub delegated_position_key: String,
@@ -660,140 +644,79 @@ impl From<Position> for PositionLegacy {
     }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DelegatedPosition {
-    pub delegated_position_key: String,
-    pub sub_dao: SubDao,
-    pub last_claimed_epoch: u64,
-    pub pending_rewards: u64,
+
+
+
+fn delegated_position_from_v0(
+    delegated_position_key: Pubkey,
+    delegated_position: DelegatedPositionV0,
+    epochs: &[epoch_info::EpochSummary],
+    position: &PositionV0,
+    voting_mint_config: &VotingMintConfigV0,
+) -> Result<DelegatedPosition> {
+    let mut pending_rewards = 0;
+    const FIRST_EPOCH: usize = 19465;
+    const FIRST_EPOCH_WITH_VEHNT: usize = 19467;
+
+    let first_unclaimed_epoch = std::cmp::max(
+        (delegated_position.last_claimed_epoch + 1) as usize,
+        FIRST_EPOCH_WITH_VEHNT,
+    );
+    // the last epochs is initialized but incomplete
+    let last_reward_epoch = epochs.len() - 1 + FIRST_EPOCH;
+    let sub_dao = SubDao::try_from(delegated_position.sub_dao)?;
+
+    for i in first_unclaimed_epoch..last_reward_epoch {
+        let epoch_summary = &epochs[i - FIRST_EPOCH];
+        assert_eq!(epoch_summary.epoch, i as u64);
+        let ts = epoch_summary.epoch_start_at_ts.unwrap();
+        let delegated_vehnt_at_epoch = position.voting_power(voting_mint_config, ts)? as u128;
+
+        let (delegation_rewards_issued, vehnt_at_epoch_start) = match sub_dao {
+            SubDao::Mobile => (epoch_summary.mobile_delegation_rewards_issued as u128, {
+                let mut mobile_vehnt = *epoch_summary.mobile_vehnt_at_epoch_start.get_decimal();
+                mobile_vehnt.set_scale(0)?;
+                mobile_vehnt.to_u128().unwrap()
+            }),
+            SubDao::Iot => (epoch_summary.iot_delegation_rewards_issued as u128, {
+                let mut mobile_vehnt = *epoch_summary.iot_vehnt_at_epoch_start.get_decimal();
+                mobile_vehnt.set_scale(0)?;
+                mobile_vehnt.to_u128().unwrap()
+            }),
+            _ => panic!("Error: calculating earnings for undelegated position?!"),
+        };
+
+        pending_rewards += u64::try_from(
+            delegated_vehnt_at_epoch
+                .checked_mul(delegation_rewards_issued)
+                .unwrap()
+                .checked_div(vehnt_at_epoch_start)
+                .unwrap(),
+        )
+        .unwrap();
+    }
+
+    Ok(Self {
+        pending_rewards,
+        delegated_position_key: delegated_position_key.to_string(),
+        sub_dao,
+        last_claimed_epoch: delegated_position.last_claimed_epoch,
+    })
 }
 
-impl DelegatedPosition {
-    fn try_from_delegated_position_v0(
-        delegated_position_key: Pubkey,
-        delegated_position: DelegatedPositionV0,
-        epochs: &[epoch_info::EpochSummary],
-        position: &PositionV0,
-        voting_mint_config: &VotingMintConfigV0,
-    ) -> Result<Self> {
-        let mut pending_rewards = 0;
-        const FIRST_EPOCH: usize = 19465;
-        const FIRST_EPOCH_WITH_VEHNT: usize = 19467;
-
-        let first_unclaimed_epoch = std::cmp::max(
-            (delegated_position.last_claimed_epoch + 1) as usize,
-            FIRST_EPOCH_WITH_VEHNT,
-        );
-        // the last epochs is initialized but incomplete
-        let last_reward_epoch = epochs.len() - 1 + FIRST_EPOCH;
-        let sub_dao = SubDao::try_from(delegated_position.sub_dao)?;
-
-        for i in first_unclaimed_epoch..last_reward_epoch {
-            let epoch_summary = &epochs[i - FIRST_EPOCH];
-            assert_eq!(epoch_summary.epoch, i as u64);
-            let ts = epoch_summary.epoch_start_at_ts.unwrap();
-            let delegated_vehnt_at_epoch = position.voting_power(voting_mint_config, ts)? as u128;
-
-            let (delegation_rewards_issued, vehnt_at_epoch_start) = match sub_dao {
-                SubDao::Mobile => (epoch_summary.mobile_delegation_rewards_issued as u128, {
-                    let mut mobile_vehnt = *epoch_summary.mobile_vehnt_at_epoch_start.get_decimal();
-                    mobile_vehnt.set_scale(0)?;
-                    mobile_vehnt.to_u128().unwrap()
-                }),
-                SubDao::Iot => (epoch_summary.iot_delegation_rewards_issued as u128, {
-                    let mut mobile_vehnt = *epoch_summary.iot_vehnt_at_epoch_start.get_decimal();
-                    mobile_vehnt.set_scale(0)?;
-                    mobile_vehnt.to_u128().unwrap()
-                }),
-                _ => panic!("Error: calculating earnings for undelegated position?!"),
-            };
-
-            pending_rewards += u64::try_from(
-                delegated_vehnt_at_epoch
-                    .checked_mul(delegation_rewards_issued)
-                    .unwrap()
-                    .checked_div(vehnt_at_epoch_start)
-                    .unwrap(),
-            )
-            .unwrap();
-        }
-
-        Ok(Self {
-            pending_rewards,
-            delegated_position_key: delegated_position_key.to_string(),
-            sub_dao,
-            last_claimed_epoch: delegated_position.last_claimed_epoch,
-        })
+fn vehnt_info_from_raw(value: VehntInfoRaw) -> VehntInfo {
+    Self {
+        has_genesis: value.has_genesis,
+        vehnt_at_curr_ts: value.vehnt_at_curr_ts,
+        pre_genesis_end_fall_rate: value.pre_genesis_end_fall_rate,
+        post_genesis_end_fall_rate: value.post_genesis_end_fall_rate,
+        genesis_end_vehnt_correction: value.genesis_end_vehnt_correction,
+        genesis_end_fall_rate_correction: value.genesis_end_fall_rate_correction,
+        end_vehnt_correction: value.end_vehnt_correction,
+        end_fall_rate_correction: value.end_fall_rate_correction,
     }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LockupType {
-    Cliff,
-    Constant,
-    #[default]
-    Unlocked,
-}
-
-impl Position {
-    pub async fn try_from_positionv0(
-        owner: Pubkey,
-        position_key: Pubkey,
-        position: PositionV0,
-        timestamp: i64,
-        voting_mint_config: &VotingMintConfigV0,
-    ) -> Result<Self> {
-        let vehnt_info = caclulate_vhnt_info(timestamp, &position, voting_mint_config)?;
-        let vehnt = position.voting_power_precise(voting_mint_config, timestamp)?;
-
-        Ok(Self {
-            owner: owner.to_string(),
-            position_key: position_key.to_string(),
-            mint: position.mint.to_string(),
-            locked_tokens: position.amount_deposited_native,
-            start_ts: position.lockup.start_ts,
-            end_ts: position.lockup.end_ts,
-            genesis_end_ts: position.genesis_end,
-            duration_s: position.lockup.end_ts - position.lockup.start_ts,
-            voting_weight: vehnt,
-            vehnt_info: vehnt_info.into(),
-            delegated: None,
-            lockup_type: match position.lockup.kind {
-                LockupKind::Constant => LockupType::Constant,
-                LockupKind::Cliff => LockupType::Cliff,
-                LockupKind::None => LockupType::Unlocked,
-            },
-        })
-    }
-}
-
-#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
-pub struct VehntInfo {
-    pub has_genesis: bool,
-    pub vehnt_at_curr_ts: u128,
-    pub pre_genesis_end_fall_rate: u128,
-    pub post_genesis_end_fall_rate: u128,
-    pub genesis_end_vehnt_correction: u128,
-    pub genesis_end_fall_rate_correction: u128,
-    pub end_vehnt_correction: u128,
-    pub end_fall_rate_correction: u128,
-}
-
-impl From<VehntInfoRaw> for VehntInfo {
-    fn from(value: VehntInfoRaw) -> Self {
-        Self {
-            has_genesis: value.has_genesis,
-            vehnt_at_curr_ts: value.vehnt_at_curr_ts,
-            pre_genesis_end_fall_rate: value.pre_genesis_end_fall_rate,
-            post_genesis_end_fall_rate: value.post_genesis_end_fall_rate,
-            genesis_end_vehnt_correction: value.genesis_end_vehnt_correction,
-            genesis_end_fall_rate_correction: value.genesis_end_fall_rate_correction,
-            end_vehnt_correction: value.end_vehnt_correction,
-            end_fall_rate_correction: value.end_fall_rate_correction,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct VotingMintConfig {

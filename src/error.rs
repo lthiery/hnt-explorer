@@ -15,7 +15,7 @@ pub enum Error {
     #[error("base64 decode error: {0}")]
     Base64Decode(#[from] base64::DecodeError),
     #[error("invalid subdao: {0}")]
-    InvalidSubDao(solana_sdk::pubkey::Pubkey),
+    InvalidSubDao(Pubkey),
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("parse int error: {0}")]

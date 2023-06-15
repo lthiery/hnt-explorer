@@ -1,7 +1,7 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
-use std::str::FromStr;
+
+use hnt_explorer_api::models;
 
 mod cli;
 mod error;
@@ -10,10 +10,10 @@ mod server;
 mod types;
 mod utils;
 
+pub type Result<T = ()> = std::result::Result<T, Error>;
 pub use error::Error;
 pub use types::*;
 pub use utils::*;
-pub type Result<T = ()> = std::result::Result<T, Error>;
 
 #[tokio::main]
 async fn main() -> Result {

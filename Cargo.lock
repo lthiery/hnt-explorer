@@ -2033,7 +2033,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hnt-explorer"
+name = "hnt-explorer-api"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",

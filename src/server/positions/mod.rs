@@ -1,9 +1,11 @@
 use super::positions;
 use super::{accounts::VehntBalance, *};
-pub use crate::cli::positions::{
-    AllPositionsData, LockupType, Position, PositionOwners, Positions,
+pub use crate::models::{
+    LockupType, Position,SubDao
 };
-use crate::types::SubDao;
+pub use crate::cli::positions::{
+    AllPositionsData, PositionOwners, Positions,
+};
 use axum::{
     body::{self, Empty, Full},
     extract::Path,
@@ -333,14 +335,7 @@ async fn positions(
     positions.resize(limit, Position::default());
     positions.clone_from_slice(&data.positions[start..start + limit]);
 
-    #[derive(Default, Debug, serde::Serialize)]
-    pub struct Data {
-        pub timestamp: i64,
-        pub positions: Vec<Position>,
-        pub positions_total_len: usize,
-    }
-
-    let data = Data {
+    let data = PositionData {
         positions_total_len: data.positions_total_len,
         positions,
         timestamp: data.timestamp,
