@@ -94,10 +94,10 @@ impl<'se> RpcCall<'se> {
         }
     }
 
-    pub(crate) fn get_multiple_accounts(array: &Vec<&'se Pubkey>) -> Self {
+    pub(crate) fn get_multiple_accounts(array: &[&'se Pubkey]) -> Self {
         Self::new(Method::GetMultipleAccounts {
             params: vec![
-                GetAccountInfoParam::Pubkeys(array.into_iter().map(|p| (*p).into()).collect()),
+                GetAccountInfoParam::Pubkeys(array.iter().map(|p| (*p).into()).collect()),
                 GetAccountInfoParam::Encoding(Encoding {
                     encoding: EncodingType::Base64,
                 }),

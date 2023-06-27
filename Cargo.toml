@@ -33,4 +33,3 @@ thiserror = "1"
 helium-api = "3"
 mime_guess = "2"
 rust_decimal = { version = "1" }
-yew = { version = "0.20", features = ["csr"] }

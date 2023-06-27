@@ -80,7 +80,7 @@ impl Client {
         Ok(account.data)
     }
 
-    pub async fn get_multiple_accounts_data(&self, pubkeys: &Vec<&Pubkey>) -> Result<Vec<Vec<u8>>> {
+    pub async fn get_multiple_accounts_data(&self, pubkeys: &[&Pubkey]) -> Result<Vec<Vec<u8>>> {
         #[derive(Deserialize, Debug)]
         pub struct Response {
             pub value: Vec<Value>,
@@ -90,7 +90,7 @@ impl Client {
             pub data: Vec<String>,
         }
 
-        let json = RpcCall::get_multiple_accounts(&pubkeys);
+        let json = RpcCall::get_multiple_accounts(pubkeys);
         let account_response: Response = self.post(&json).await?;
         account_response
             .value
@@ -225,7 +225,7 @@ impl Client {
 
         let json = RpcCall::get_program_accounts_with_filters(program_id, filters);
         let account_response: Vec<ReceivedAccountsAndPubkeys> = self.post(&json).await?;
-        Ok(account_response
+        account_response
             .into_iter()
             .map(|r| {
                 Ok((
@@ -241,7 +241,7 @@ impl Client {
                     },
                 ))
             })
-            .collect::<Result<Vec<(Pubkey, Account)>>>()?)
+            .collect::<Result<Vec<(Pubkey, Account)>>>()
     }
 }
 
