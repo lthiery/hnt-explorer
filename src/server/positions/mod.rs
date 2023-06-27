@@ -137,7 +137,7 @@ impl Memory {
     }
 
     async fn pull_latest_data(
-        rpc_client: &Arc<RpcClient>,
+        rpc_client: &Arc<rpc::Client>,
         epoch_summaries: Arc<Mutex<epoch_info::Memory>>,
         position_owner_map: &mut PositionOwners,
     ) -> Result<AllPositionsData> {

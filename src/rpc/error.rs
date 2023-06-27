@@ -20,6 +20,8 @@ pub enum Error {
     Join(#[from] tokio::task::JoinError),
     #[error("no asset by authority for {0}")]
     NoAssetByAuthority(String),
+    #[error("parse int error: {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
 }
 
 impl Error {

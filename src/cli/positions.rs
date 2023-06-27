@@ -17,8 +17,8 @@ use voter_stake_registry::state::{LockupKind, PositionV0, VotingMintConfigV0, PR
 #[allow(unused)]
 /// This function can be used when a single query is too big
 async fn get_stake_accounts_incremental(
-    rpc_client: &RpcClient,
-) -> Result<Vec<(Pubkey, solana_sdk::account::Account)>> {
+    rpc_client: &rpc::Client,
+) -> Result<Vec<(Pubkey, rpc::Account)>> {
     let mut prefix = [251, 212, 32, 100, 102, 1, 247, 81, 0];
     let mut accounts = Vec::new();
     for i in 0..255 {
@@ -29,24 +29,24 @@ async fn get_stake_accounts_incremental(
 }
 
 /// This function will work until there's too many to fetch in a single call
-pub async fn get_delegateed_positions(
-    rpc_client: &RpcClient,
-) -> Result<Vec<(Pubkey, solana_sdk::account::Account)>> {
+pub async fn get_delegated_positions(
+    rpc_client: &rpc::Client,
+) -> Result<Vec<(Pubkey, rpc::Account)>> {
     const DELEGATE_POSITION_V0_DESCRIMINATOR: [u8; 8] = [251, 212, 32, 100, 102, 1, 247, 81];
     get_accounts_with_prefix(rpc_client, &DELEGATE_POSITION_V0_DESCRIMINATOR).await
 }
 
 async fn get_accounts_with_prefix(
-    rpc_client: &RpcClient,
+    rpc_client: &rpc::Client,
     input: &[u8],
-) -> Result<Vec<(Pubkey, solana_sdk::account::Account)>> {
+) -> Result<Vec<(Pubkey, rpc::Account)>> {
     let helium_dao_id = Pubkey::from_str(HELIUM_DAO_ID)?;
-    let mut config = RpcProgramAccountsConfig::default();
-    let memcmp = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, input));
-    config.filters = Some(vec![RpcFilterType::DataSize(196), memcmp]);
-    config.account_config.encoding = Some(UiAccountEncoding::Base64);
+    let memcmp = rpc::GetProgramAccountsFilter::Memcmp(rpc::Memcmp::new(0, input));
     let accounts = rpc_client
-        .get_program_accounts_with_config(&helium_dao_id, config)
+        .get_program_accounts_with_filter(
+            &helium_dao_id,
+            vec![rpc::GetProgramAccountsFilter::DataSize(196), memcmp],
+        )
         .await?;
     Ok(accounts)
 }
@@ -203,7 +203,7 @@ pub async fn get_positions_of_mint(
                     Some(owner) => Ok(*owner),
                     None => {
                         let client = rpc::Client::default();
-                        match rpc::get_owner_by_mint(&client, &position.mint).await {
+                        match client.get_owner_by_mint(&position.mint).await {
                             Ok(owner) => {
                                 position_owners_map.insert(*pubkey, owner);
                                 Ok(owner)
@@ -248,7 +248,7 @@ impl PositionOwners {
 }
 
 pub async fn get_data(
-    rpc_client: &RpcClient,
+    rpc_client: &rpc::Client,
     epoch_info: Arc<Vec<epoch_info::EpochSummary>>,
     position_owners_map: &mut PositionOwners,
 ) -> Result<AllPositionsData> {
@@ -262,7 +262,7 @@ pub async fn get_data(
         println!("Initializing position owners map");
         let client = rpc::Client::default();
         let position_keys = positions_data.positions.iter().map(|p| &p.1.mint).collect();
-        let owners = rpc::get_all_owners_by_mint(&client, &position_keys, 100).await?;
+        let owners = client.get_all_owners_by_mint(&position_keys, 100).await?;
         positions_data
             .positions
             .iter()
@@ -330,7 +330,7 @@ pub async fn get_data(
     .await?;
 
     // this next section only applies to veHNT since veHNT can delegate towards subDAOs
-    let delegated_positions = get_delegateed_positions(rpc_client).await?;
+    let delegated_positions = get_delegated_positions(rpc_client).await?;
     let delegated_positions = delegated_positions
         .iter()
         .map(|(pubkey, account)| {
@@ -489,7 +489,7 @@ fn get_stats(
 }
 
 impl Positions {
-    pub async fn run(self, rpc_client: RpcClient) -> Result {
+    pub async fn run(self, rpc_client: rpc::Client) -> Result {
         let epoch_summaries = epoch_info::get_epoch_summaries(&rpc_client).await?;
         let all_data = get_data(
             &rpc_client,

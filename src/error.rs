@@ -6,8 +6,6 @@ use thiserror::Error;
 pub enum Error {
     #[error("solana pubkey parse: {0}")]
     SolanaPubkeyParse(#[from] solana_sdk::pubkey::ParsePubkeyError),
-    #[error("solana client error: {0}")]
-    SolanaClient(#[from] solana_client::client_error::ClientError),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("anchor lang: {0}")]

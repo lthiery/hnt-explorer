@@ -1,12 +1,6 @@
 use super::*;
 
 use anchor_lang::prelude::{AccountDeserialize, Result as AnchorResult};
-use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    nonblocking::rpc_client::RpcClient,
-    rpc_config::RpcProgramAccountsConfig,
-    rpc_filter::{Memcmp, RpcFilterType},
-};
 use solana_sdk::pubkey::Pubkey;
 
 pub mod accounts;
@@ -40,7 +34,7 @@ pub enum Cmd {
 }
 
 impl Cli {
-    pub async fn run(self, rpc_client: RpcClient) -> Result {
+    pub async fn run(self, rpc_client: rpc::Client) -> Result {
         match self.cmd {
             Cmd::Account(cmd) => cmd.run(rpc_client).await,
             Cmd::EpochInfo(cmd) => cmd.run(rpc_client).await,

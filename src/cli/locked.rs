@@ -17,15 +17,16 @@ pub struct Data {
 }
 
 /// This function will work until there's too many to fetch in a single call
-pub async fn get_data(rpc_client: &RpcClient) -> Result<Data> {
+pub async fn get_data(rpc_client: &rpc::Client) -> Result<Data> {
     const POSITION_V0_DESCRIMINATAOR: [u8; 8] = [152, 131, 154, 46, 158, 42, 31, 233];
     let helium_vsr_id = Pubkey::from_str(HELIUM_VSR_ID)?;
-    let mut config = RpcProgramAccountsConfig::default();
-    let memcmp = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &POSITION_V0_DESCRIMINATAOR));
-    config.filters = Some(vec![RpcFilterType::DataSize(180), memcmp]);
-    config.account_config.encoding = Some(UiAccountEncoding::Base64);
+    let memcmp =
+        rpc::GetProgramAccountsFilter::Memcmp(rpc::Memcmp::new(0, &POSITION_V0_DESCRIMINATAOR));
     let accounts = rpc_client
-        .get_program_accounts_with_config(&helium_vsr_id, config)
+        .get_program_accounts_with_filter(
+            &helium_vsr_id,
+            vec![rpc::GetProgramAccountsFilter::DataSize(180), memcmp],
+        )
         .await?;
     let positions = accounts
         .iter()
@@ -35,19 +36,21 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<Data> {
         })
         .collect::<Vec<(Pubkey, PositionV0)>>();
 
-    let registrar_keys: Vec<Pubkey> = positions
+    let registrar_keys: Vec<&Pubkey> = positions
         .iter()
-        .map(|(_, p)| p.registrar)
+        .map(|(_, p)| &p.registrar)
         .collect::<HashSet<_>>()
         .into_iter()
         .collect();
 
-    let registrars_raw = rpc_client.get_multiple_accounts(&registrar_keys).await?;
+    let registrars_raw = rpc_client
+        .get_multiple_accounts_data(&registrar_keys)
+        .await?;
     let registrars_raw: Vec<Registrar> = registrars_raw
         .iter()
-        .map(|registrar| {
-            let mut data = registrar.as_ref().unwrap().data.as_slice();
-            Registrar::try_deserialize(&mut data)
+        .map(|data| {
+            let data = data.clone();
+            Registrar::try_deserialize(&mut data.as_slice())
         })
         .map(|result| result.unwrap())
         .collect();
@@ -57,7 +60,7 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<Data> {
     for (pubkey, registrar) in registrar_keys.iter().zip(registrars_raw.iter()) {
         let mint = &registrar.voting_mints[0];
         mint_configs.insert(mint.mint, mint.clone());
-        registrar_to_mint.insert(*pubkey, mint.mint);
+        registrar_to_mint.insert(**pubkey, mint.mint);
     }
 
     Ok(Data {
@@ -68,7 +71,7 @@ pub async fn get_data(rpc_client: &RpcClient) -> Result<Data> {
 }
 
 impl Locked {
-    pub async fn run(self, rpc_client: RpcClient) -> Result {
+    pub async fn run(self, rpc_client: rpc::Client) -> Result {
         let data = get_data(&rpc_client).await?;
 
         let mut total_hnt = 0;

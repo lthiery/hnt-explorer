@@ -1,4 +1,4 @@
-use super::error::Error;
+use super::{error::Error, rpc};
 use std::collections::HashMap;
 
 use axum::{
@@ -22,15 +22,13 @@ mod positions;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use solana_client::nonblocking::rpc_client::RpcClient;
-
 const DATA_NOT_INIT_MSG: &str = "Data not initialized yet. Please try again in a few minutes.";
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct Server {}
 
 impl Server {
-    pub async fn run(self, rpc_client: RpcClient) -> Result {
+    pub async fn run(self, rpc_client: rpc::Client) -> Result {
         let rpc_client = Arc::new(rpc_client);
 
         println!("Initializing server with data...");
