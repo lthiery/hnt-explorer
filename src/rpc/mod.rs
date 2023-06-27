@@ -321,7 +321,7 @@ mod test {
     async fn test_get_multiple_accounts() {
         let client = Client::default();
         let data = client
-            .get_multiple_accounts_data(vec![
+            .get_multiple_accounts_data(&[
                 &Pubkey::from_str("CfGsBm5shwwb5tVpFjdj8zPbYCxJ3LhwNxBSCX7WFCCJ").unwrap(),
                 &Pubkey::from_str("GxXXdsdfT4Z7ntYphmBdLRTBTLHPu2cdtCEDK56uGK28").unwrap(),
             ])
