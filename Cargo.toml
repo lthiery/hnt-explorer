@@ -7,6 +7,7 @@ edition = "2021"
 anchor-lang = "*"
 axum = { version = "0", features = ["query"] }
 base64 = "0"
+bs58 = "0"
 chrono = "0"
 csv = "*"
 clap = { version = "4", features = ["derive"]}
@@ -21,15 +22,15 @@ serde_json = "*"
 json = "*"
 lazy_static = "1"
 rand = "0.8"
-solana-account-decoder = "1.14.10"
-solana-client = "1.14.10"
+serde_bytes = "0"
+solana-account-decoder = "1"
 solana-sdk = "1.14.10"
 solana-program = "1.14.10"
 spl-associated-token-account = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library", features = [ "no-entrypoint" ] }
-spl-token-client = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library" }
 spl-token-2022 = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library" }
-tokio ={ version = "1", features = ["fs"] }
+tokio ={ version = "1", features = ["fs", "macros"] }
 thiserror = "1"
 helium-api = "3"
 mime_guess = "2"
 rust_decimal = { version = "1" }
+yew = { version = "0.20", features = ["csr"] }

@@ -6,25 +6,21 @@ use anchor_lang::AccountDeserialize;
 pub struct EpochInfo {}
 
 use helium_sub_daos::SubDaoEpochInfoV0;
+use rpc::GetProgramAccountsFilter;
 use rust_decimal::Decimal;
 use serde::Serialize;
 use std::collections::HashMap;
-
 use voter_stake_registry::state::PRECISION_FACTOR;
 
-pub async fn get_epoch_summaries(rpc_client: &RpcClient) -> Result<Vec<EpochSummary>> {
+pub async fn get_epoch_summaries(rpc_client: &rpc::Client) -> Result<Vec<EpochSummary>> {
     let helium_dao_id = Pubkey::from_str(HELIUM_DAO_ID)?;
     const SUB_DAO_EPOCH_INFO_DESCRIMINATOR: [u8; 8] = [45, 249, 177, 20, 170, 251, 37, 37];
 
-    let mut config = RpcProgramAccountsConfig::default();
-    let memcmp = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
-        0,
-        &SUB_DAO_EPOCH_INFO_DESCRIMINATOR,
-    ));
-    config.filters = Some(vec![RpcFilterType::DataSize(204), memcmp]);
-    config.account_config.encoding = Some(UiAccountEncoding::Base64);
+    let memcmp =
+        GetProgramAccountsFilter::Memcmp(rpc::Memcmp::new(0, &SUB_DAO_EPOCH_INFO_DESCRIMINATOR));
+    let filters = vec![GetProgramAccountsFilter::DataSize(204), memcmp];
     let accounts = rpc_client
-        .get_program_accounts_with_config(&helium_dao_id, config)
+        .get_program_accounts_with_filter(&helium_dao_id, filters)
         .await?;
 
     let mut iot_epochs = HashMap::new();
@@ -88,7 +84,7 @@ pub async fn get_epoch_summaries(rpc_client: &RpcClient) -> Result<Vec<EpochSumm
 }
 
 impl EpochInfo {
-    pub async fn run(self, rpc_client: RpcClient) -> Result {
+    pub async fn run(self, rpc_client: rpc::Client) -> Result {
         let summaries = get_epoch_summaries(&rpc_client).await?;
         use csv::Writer;
         let mut wtr = Writer::from_path("epochs.csv")?;

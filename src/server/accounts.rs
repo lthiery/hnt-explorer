@@ -102,7 +102,7 @@ impl From<accounts::Balance> for HntBalance {
 }
 
 pub async fn get_account(
-    Extension(rpc_client): Extension<Arc<RpcClient>>,
+    Extension(rpc_client): Extension<Arc<rpc::Client>>,
     Extension(positions): Extension<Arc<Mutex<Option<positions::Memory>>>>,
     Path(account): Path<String>,
 ) -> HandlerResult {

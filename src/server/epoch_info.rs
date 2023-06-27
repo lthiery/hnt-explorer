@@ -1,6 +1,8 @@
-use super::super::cli::epoch_info::{self, EpochSummary};
+use super::super::{
+    cli::epoch_info::{self, EpochSummary},
+    rpc,
+};
 use super::*;
-//use epoch_info::EpochSummary;
 use chrono::{Datelike, Utc};
 
 #[derive(Debug)]
@@ -9,12 +11,12 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub async fn new(rpc_client: &Arc<RpcClient>) -> Result<Memory> {
+    pub async fn new(rpc_client: &Arc<rpc::Client>) -> Result<Memory> {
         let latest_data = Arc::new(Self::pull_latest_data(rpc_client).await?);
         Ok(Memory { latest_data })
     }
 
-    async fn pull_latest_data(rpc_client: &Arc<RpcClient>) -> Result<Vec<EpochSummary>> {
+    async fn pull_latest_data(rpc_client: &Arc<rpc::Client>) -> Result<Vec<EpochSummary>> {
         let mut latest_data = epoch_info::get_epoch_summaries(rpc_client).await?;
         latest_data.iter_mut().for_each(|x| x.scale_down());
         Ok(latest_data)
@@ -27,7 +29,7 @@ impl Memory {
 }
 
 /// Only updates the epoch info when the date rolls over
-pub async fn get_epoch_info(rpc_client: Arc<RpcClient>, memory: Arc<Mutex<Memory>>) -> Result {
+pub async fn get_epoch_info(rpc_client: Arc<rpc::Client>, memory: Arc<Mutex<Memory>>) -> Result {
     let mut last_pull_day = Utc::now().day();
     loop {
         time::sleep(time::Duration::from_secs(60 * 5)).await;

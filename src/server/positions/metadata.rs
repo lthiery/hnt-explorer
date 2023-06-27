@@ -9,7 +9,6 @@ pub async fn vehnt_positions_metadata(
     Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
     query: Query<StatsParams>,
 ) -> HandlerResult {
-    const DEFAULT_LIMIT: usize = 500;
     let query = query.0;
     let data = {
         let memory = memory.lock().await;

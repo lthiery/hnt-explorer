@@ -1,7 +1,7 @@
 use super::*;
 
 pub async fn get_positions(
-    rpc_client: Arc<RpcClient>,
+    rpc_client: Arc<rpc::Client>,
     memory: Arc<Mutex<Option<Memory>>>,
     epoch_memory: Arc<Mutex<epoch_info::Memory>>,
 ) -> Result {

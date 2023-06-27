@@ -47,8 +47,14 @@ enum Method<'se> {
     GetTokenLargestAccounts {
         params: Vec<InnerPubkey<'se>>,
     },
+    GetTokenSupply {
+        params: Vec<InnerPubkey<'se>>,
+    },
     GetAssetsByAuthority {
         params: GetAssetsByAuthorityParams<'se>,
+    },
+    GetProgramAccounts {
+        params: Vec<GetProgramAccountsParams<'se>>,
     },
 }
 
@@ -72,9 +78,10 @@ struct Encoding {
     encoding: EncodingType,
 }
 
-#[derive(Copy, Clone, Debug, Serialize)]
+#[derive(Copy, Clone, Debug, Serialize, Default)]
 #[serde(rename_all = "lowercase")]
 enum EncodingType {
+    #[default]
     Base64,
 }
 
@@ -87,10 +94,10 @@ impl<'se> RpcCall<'se> {
         }
     }
 
-    pub(crate) fn get_multiple_accounts(array: Vec<&'se Pubkey>) -> Self {
+    pub(crate) fn get_multiple_accounts(array: &Vec<&'se Pubkey>) -> Self {
         Self::new(Method::GetMultipleAccounts {
             params: vec![
-                GetAccountInfoParam::Pubkeys(array.into_iter().map(|p| p.into()).collect()),
+                GetAccountInfoParam::Pubkeys(array.into_iter().map(|p| (*p).into()).collect()),
                 GetAccountInfoParam::Encoding(Encoding {
                     encoding: EncodingType::Base64,
                 }),
@@ -115,6 +122,12 @@ impl<'se> RpcCall<'se> {
         })
     }
 
+    pub(crate) fn get_token_supply(pubkey: &'se Pubkey) -> Self {
+        Self::new(Method::GetTokenSupply {
+            params: vec![pubkey.into()],
+        })
+    }
+
     pub(crate) fn get_assets_by_authority(authority_address: &'se Pubkey) -> Self {
         Self::new(Method::GetAssetsByAuthority {
             params: GetAssetsByAuthorityParams {
@@ -122,6 +135,28 @@ impl<'se> RpcCall<'se> {
                 page: 1,
                 limit: 100,
             },
+        })
+    }
+
+    #[allow(unused)]
+    pub(crate) fn get_program_accounts(program_id: &'se Pubkey) -> Self {
+        Self::get_program_accounts_with_filters(program_id, vec![])
+    }
+
+    pub(crate) fn get_program_accounts_with_filters(
+        program_id: &'se Pubkey,
+        filters: Vec<GetProgramAccountsFilter<'se>>,
+    ) -> Self {
+        Self::new(Method::GetProgramAccounts {
+            params: vec![
+                GetProgramAccountsParams::Pubkey(program_id.into()),
+                GetProgramAccountsParams::Object(GetProgramAccountsObject {
+                    filters,
+                    encoding: Encoding {
+                        encoding: EncodingType::Base64,
+                    },
+                }),
+            ],
         })
     }
 }
@@ -142,6 +177,27 @@ struct GetAssetsByAuthorityParams<'se> {
     authority_address: InnerPubkey<'se>,
     page: usize,
     limit: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(untagged)]
+enum GetProgramAccountsParams<'se> {
+    #[allow(unused)]
+    Pubkey(InnerPubkey<'se>),
+    Object(GetProgramAccountsObject<'se>),
+}
+#[derive(Clone, Debug, Serialize)]
+struct GetProgramAccountsObject<'se> {
+    filters: Vec<GetProgramAccountsFilter<'se>>,
+    #[serde(flatten)]
+    encoding: Encoding,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataSlice {
+    pub offset: usize,
+    pub length: usize,
 }
 
 fn now_millis() -> String {
