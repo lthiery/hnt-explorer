@@ -32,17 +32,21 @@ impl Memory {
 pub async fn get_epoch_info(rpc_client: Arc<rpc::Client>, memory: Arc<Mutex<Memory>>) -> Result {
     let mut last_pull_day = Utc::now().day();
     loop {
-        time::sleep(time::Duration::from_secs(60 * 5)).await;
+        time::sleep(time::Duration::from_secs(60)).await;
         let day = Utc::now().day();
         if day != last_pull_day {
-            last_pull_day = day;
             let mut latest_data = Memory::pull_latest_data(&rpc_client).await;
             while latest_data.is_err() {
-                time::sleep(time::Duration::from_secs(60)).await;
+                time::sleep(time::Duration::from_secs(30)).await;
                 latest_data = Memory::pull_latest_data(&rpc_client).await;
             }
+            let latest_data = latest_data?;
             let mut memory = memory.lock().await;
-            memory.update_data(latest_data.unwrap()).await?;
+            // if the lengths are different, than the latest day's data is available
+            if memory.latest_data.len() != latest_data.len() {
+                last_pull_day = day;
+                memory.update_data(latest_data).await?;
+            }
         }
     }
 }
