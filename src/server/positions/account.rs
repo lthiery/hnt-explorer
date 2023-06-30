@@ -79,11 +79,11 @@ impl Account {
                         match delegated.sub_dao {
                             SubDao::Iot => {
                                 self.balances.vehnt.iot_delegated += p.voting_weight;
-                                self.balances.pending_iot = delegated.pending_rewards;
+                                self.balances.pending_iot += delegated.pending_rewards;
                             }
                             SubDao::Mobile => {
                                 self.balances.vehnt.mobile_delegated += p.voting_weight;
-                                self.balances.pending_mobile = delegated.pending_rewards;
+                                self.balances.pending_mobile += delegated.pending_rewards;
                             }
                             SubDao::Unknown => {
                                 println!(
