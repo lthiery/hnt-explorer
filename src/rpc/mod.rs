@@ -59,19 +59,20 @@ impl Client {
     pub async fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
         #[derive(Deserialize, Debug)]
         struct Response {
-            pub value: ReceivedAccount,
+            pub value: Option<ReceivedAccount>,
         }
 
         let json = RpcCall::get_account_info(pubkey);
         let account_response: Response = self.post(&json).await?;
+        let account = account_response.value.ok_or(Error::AccountNotFound)?;
         Ok(Account {
-            lamports: account_response.value.lamports,
-            owner: account_response.value.owner,
+            lamports: account.lamports,
+            owner: account.owner,
             data: base64::engine::general_purpose::STANDARD
-                .decode(&account_response.value.data[0])
+                .decode(&account.data[0])
                 .map_err(Error::B64Decode)?,
-            executable: account_response.value.executable,
-            rent_epoch: account_response.value.rent_epoch,
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
         })
     }
 

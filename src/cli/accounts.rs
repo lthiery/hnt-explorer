@@ -82,7 +82,17 @@ async fn get_account(
     let spl_atc = spl_associated_token_account::get_associated_token_address(pubkey, mint);
     let program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap();
 
-    let account = rpc_client.get_account(&spl_atc).await?;
+    let account = rpc_client.get_account(&spl_atc).await;
+
+    if let Err(rpc::Error::AccountNotFound) = account {
+        return Ok(SplAccount {
+            mint: *mint,
+            lamports: 0,
+            token: 0,
+        });
+    };
+    let account = account?;
+
     let program_name = PARSABLE_PROGRAM_IDS
         .get(&program_id)
         .ok_or(Error::SolanaProgramIdNotParsable(program_id.to_string()))?;

@@ -22,6 +22,8 @@ pub enum Error {
     NoAssetByAuthority(String),
     #[error("parse int error: {0}")]
     ParseInt(#[from] std::num::ParseIntError),
+    #[error("Account not found.")]
+    AccountNotFound,
 }
 
 impl Error {
