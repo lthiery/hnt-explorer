@@ -201,7 +201,7 @@ impl Client {
             if last_output.elapsed().as_secs() > 5 || owners.len() == position_id.len() {
                 last_output = Instant::now();
                 println!(
-                    "Completed {} / {} positions in {} seconds. ",
+                    "Completed {:>#5}/{} positions in {:>#3} seconds. ",
                     owners.len(),
                     position_id.len(),
                     start.elapsed().as_secs()

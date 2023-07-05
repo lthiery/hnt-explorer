@@ -302,7 +302,7 @@ pub async fn get_data(
         })
         .collect();
     all_data.veiot.positions_total_len = all_data.veiot.positions.len();
-    println!("veiot positions: {}", all_data.veiot.positions.len());
+    println!("veiot    positions: {:>#5}", all_data.veiot.positions.len());
 
     let (_vemobile_positions_raw, vemobile_positions) = get_positions_of_mint(
         &positions_data,
@@ -319,7 +319,10 @@ pub async fn get_data(
         })
         .collect();
     all_data.vemobile.positions_total_len = all_data.vemobile.positions.len();
-    println!("vemobile positions: {}", all_data.vemobile.positions.len());
+    println!(
+        "vemobile positions: {:>#5}",
+        all_data.vemobile.positions.len()
+    );
 
     let (vehnt_positions_raw, mut vehnt_positions) = get_positions_of_mint(
         &positions_data,
@@ -423,6 +426,7 @@ pub async fn get_data(
         d.positions.push(position_copy);
     }
     d.positions_total_len = d.positions.len();
+    println!("vehnt    positions: {:>#5}", d.positions.len());
 
     s.network.stats = get_stats(
         None,
@@ -452,6 +456,7 @@ pub async fn get_data(
         hnt_amounts.clone(),
         lockups.clone(),
     );
+
     let total_positions = all_data.vehnt.positions_total_len
         + all_data.vemobile.positions_total_len
         + all_data.veiot.positions_total_len;

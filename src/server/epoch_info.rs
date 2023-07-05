@@ -44,6 +44,7 @@ pub async fn get_epoch_info(rpc_client: Arc<rpc::Client>, memory: Arc<Mutex<Memo
             let mut memory = memory.lock().await;
             // if the lengths are different, than the latest day's data is available
             if memory.latest_data.len() != latest_data.len() {
+                println!("New epoch data pulled");
                 last_pull_day = day;
                 memory.update_data(latest_data).await?;
             }
