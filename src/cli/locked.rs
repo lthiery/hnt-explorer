@@ -1,7 +1,7 @@
 use super::*;
 
+use helium_anchor_gen::voter_stake_registry::{PositionV0, Registrar, VotingMintConfigV0};
 use std::collections::{HashMap, HashSet};
-use voter_stake_registry::state::{PositionV0, Registrar, VotingMintConfigV0};
 
 #[derive(Debug, Clone, clap::Args)]
 /// Fetches all delegated positions and total HNT, veHNT, and subDAO delegations.

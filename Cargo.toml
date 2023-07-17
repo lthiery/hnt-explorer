@@ -13,10 +13,9 @@ csv = "*"
 clap = { version = "4", features = ["derive"]}
 futures = "0"
 helium-crypto = {version = "0.6.3", features = ["solana"] }
+#helium-anchor-gen = { git = "https://github.com/lthiery/helium-anchor-gen.git" }
+helium-anchor-gen = { path = "../helium-anchor-gen" }
 reqwest = { version = "0", default-features = false, features = ["rustls-tls", "json"]}
-helium-sub-daos = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
-fanout = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
-voter-stake-registry = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 json = "*"

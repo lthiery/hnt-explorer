@@ -24,6 +24,8 @@ pub enum Error {
     ParseInt(#[from] std::num::ParseIntError),
     #[error("Account not found.")]
     AccountNotFound,
+    #[error("try from slice error: {0}")]
+    TryFromSlice(#[from] std::array::TryFromSliceError),
 }
 
 impl Error {
