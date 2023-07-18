@@ -1,5 +1,5 @@
 use super::Result;
-use solana_sdk::pubkey::Pubkey;
+use anchor_lang::solana_program::pubkey::Pubkey;
 
 pub const HELIUM_DAO_ID: &str = "hdaoVTCqhfHHo75XdAMxBKdUqvq1i5bF23sisBqVgGR";
 pub const HELIUM_VSR_ID: &str = "hvsrNC3NKbcryqDs2DocYHZ9yPKEVzdSjQG6RVtK1s8";
@@ -14,7 +14,8 @@ pub const MOBILE_SUBDAO: &str = "Gm9xDCJawDEKDrrQW6haw94gABaYzQwCq4ZQU8h8bd22";
 pub const TOKEN_DIVIDER: u128 = 100_000_000; // 10^8
 pub const DNT_DIVIDER: u128 = 1_000_000; // 10^6
 
-pub const ANOTHER_DIVIDER: u128 = TOKEN_DIVIDER * voter_stake_registry::state::PRECISION_FACTOR;
+pub const ANOTHER_DIVIDER: u128 =
+    TOKEN_DIVIDER * helium_anchor_gen::voter_stake_registry::PRECISION_FACTOR;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]

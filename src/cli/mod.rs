@@ -1,7 +1,9 @@
 use super::*;
 
-use anchor_lang::prelude::{AccountDeserialize, Result as AnchorResult};
-use solana_sdk::pubkey::Pubkey;
+use anchor_lang::{
+    prelude::{AccountDeserialize, Result as AnchorResult},
+    solana_program::pubkey::Pubkey,
+};
 
 pub mod accounts;
 pub mod epoch_info;

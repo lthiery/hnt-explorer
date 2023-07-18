@@ -13,22 +13,17 @@ csv = "*"
 clap = { version = "4", features = ["derive"]}
 futures = "0"
 helium-crypto = {version = "0.6.3", features = ["solana"] }
+helium-anchor-gen = { git = "https://github.com/lthiery/helium-anchor-gen.git" }
 reqwest = { version = "0", default-features = false, features = ["rustls-tls", "json"]}
-helium-sub-daos = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
-fanout = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
-voter-stake-registry = { git = "https://github.com/helium/helium-program-library.git", features = [ "no-entrypoint" ] }
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 json = "*"
 lazy_static = "1"
 rand = "0.8"
 serde_bytes = "0"
-solana-account-decoder = "1"
-solana-sdk = "1.14.10"
-solana-program = "1.14.10"
-spl-associated-token-account = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library", features = [ "no-entrypoint" ] }
-spl-token-2022 = { version = "*", git = "https://github.com/ChewingGlass/solana-program-library" }
-tokio ={ version = "1", features = ["fs", "macros"] }
+spl-associated-token-account = { version = "1" }
+spl-token-2022 = { version = "0" }
+tokio ={ version = "1", features = ["fs", "macros", "rt-multi-thread"] }
 thiserror = "1"
 helium-api = "3"
 mime_guess = "2"

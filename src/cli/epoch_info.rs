@@ -5,12 +5,14 @@ use anchor_lang::AccountDeserialize;
 /// Scrape all SubDao epoch info
 pub struct EpochInfo {}
 
-use helium_sub_daos::SubDaoEpochInfoV0;
+use helium_anchor_gen::{
+    helium_sub_daos::{SubDaoEpochInfoV0, SubDaoEpochInfoV0Trait},
+    voter_stake_registry::PRECISION_FACTOR,
+};
 use rpc::GetProgramAccountsFilter;
 use rust_decimal::Decimal;
 use serde::Serialize;
 use std::collections::HashMap;
-use voter_stake_registry::state::PRECISION_FACTOR;
 
 pub async fn get_epoch_summaries(rpc_client: &rpc::Client) -> Result<Vec<EpochSummary>> {
     let helium_dao_id = Pubkey::from_str(HELIUM_DAO_ID)?;

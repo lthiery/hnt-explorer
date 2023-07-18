@@ -9,10 +9,15 @@ pub struct Positions {
     verify: bool,
 }
 
-use helium_sub_daos::{
-    caclulate_vhnt_info, DelegatedPositionV0, PrecisePosition, SubDaoV0, VehntInfo as VehntInfoRaw,
+use helium_anchor_gen::{
+    helium_sub_daos::{
+        caclulate_vhnt_info, DelegatedPositionV0, PrecisePosition, SubDaoV0,
+        VehntInfo as VehntInfoRaw,
+    },
+    voter_stake_registry::{
+        LockupKind, PositionV0, PositionV0Trait, VotingMintConfigV0, PRECISION_FACTOR,
+    },
 };
-use voter_stake_registry::state::{LockupKind, PositionV0, VotingMintConfigV0, PRECISION_FACTOR};
 
 #[allow(unused)]
 /// This function can be used when a single query is too big
@@ -192,13 +197,25 @@ pub async fn get_positions_of_mint(
     timestamp: i64,
 ) -> Result<(HashMap<Pubkey, PositionV0>, HashMap<Pubkey, Position>)> {
     let voting_mint_config = &positions_data.mint_configs[&Pubkey::from_str(mint)?];
+    let voting_mint_config = VotingMintConfigV0 {
+        mint: voting_mint_config.mint,
+        baseline_vote_weight_scaled_factor: voting_mint_config.baseline_vote_weight_scaled_factor,
+        max_extra_lockup_vote_weight_scaled_factor: voting_mint_config
+            .max_extra_lockup_vote_weight_scaled_factor,
+        genesis_vote_power_multiplier: voting_mint_config.genesis_vote_power_multiplier,
+        genesis_vote_power_multiplier_expiration_ts: voting_mint_config
+            .genesis_vote_power_multiplier_expiration_ts,
+        lockup_saturation_secs: voting_mint_config.lockup_saturation_secs,
+        digit_shift: voting_mint_config.digit_shift,
+    };
+
     let mut positions_raw = HashMap::new();
     let mut positions = HashMap::new();
 
     for (pubkey, position) in positions_data.positions.iter() {
         if let Some(position_mint) = positions_data.registrar_to_mint.get(&position.registrar) {
             if position_mint.to_string().as_str() == mint {
-                positions_raw.insert(*pubkey, position.clone());
+                positions_raw.insert(*pubkey, *position);
                 let owner: Result<Pubkey> = match position_owners_map.get(pubkey) {
                     Some(owner) => Ok(*owner),
                     None => {
@@ -218,9 +235,9 @@ pub async fn get_positions_of_mint(
                         let position = Position::try_from_positionv0(
                             owner,
                             *pubkey,
-                            position.clone(),
+                            *position,
                             timestamp,
-                            voting_mint_config,
+                            &voting_mint_config,
                         )
                         .await?;
                         positions.insert(*pubkey, position);
@@ -253,8 +270,8 @@ pub async fn get_data(
     position_owners_map: &mut PositionOwners,
 ) -> Result<AllPositionsData> {
     let mut all_data = AllPositionsData::new();
-    let mut d = &mut all_data.vehnt;
-    let mut s = &mut all_data.stats;
+    let d = &mut all_data.vehnt;
+    let s = &mut all_data.stats;
 
     let positions_data = locked::get_data(rpc_client).await?;
     // if the map is empty, we assume it hasn't been initialized and so we initialize it
@@ -344,6 +361,18 @@ pub async fn get_data(
         .collect::<AnchorResult<Vec<_>>>()?;
 
     let voting_mint_config = &positions_data.mint_configs[&Pubkey::from_str(HNT_MINT)?];
+    let voting_mint_config = VotingMintConfigV0 {
+        mint: voting_mint_config.mint,
+        baseline_vote_weight_scaled_factor: voting_mint_config.baseline_vote_weight_scaled_factor,
+        max_extra_lockup_vote_weight_scaled_factor: voting_mint_config
+            .max_extra_lockup_vote_weight_scaled_factor,
+        genesis_vote_power_multiplier: voting_mint_config.genesis_vote_power_multiplier,
+        genesis_vote_power_multiplier_expiration_ts: voting_mint_config
+            .genesis_vote_power_multiplier_expiration_ts,
+        lockup_saturation_secs: voting_mint_config.lockup_saturation_secs,
+        digit_shift: voting_mint_config.digit_shift,
+    };
+
     for (pubkey, delegated_position) in delegated_positions {
         let delegated_position = delegated_position;
         let position_v0 = vehnt_positions_raw.get(&delegated_position.position);
@@ -355,7 +384,7 @@ pub async fn get_data(
                     delegated_position,
                     &epoch_info,
                     position_v0,
-                    voting_mint_config,
+                    &voting_mint_config,
                 )?);
                 d.delegated_positions
                     .push(PositionLegacy::from(position.clone()));

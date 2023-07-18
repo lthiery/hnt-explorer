@@ -1,11 +1,11 @@
 use crate::rpc;
-use solana_sdk::pubkey::Pubkey;
+use anchor_lang::solana_program::pubkey::Pubkey;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("solana pubkey parse: {0}")]
-    SolanaPubkeyParse(#[from] solana_sdk::pubkey::ParsePubkeyError),
+    SolanaPubkeyParse(#[from] anchor_lang::solana_program::pubkey::ParsePubkeyError),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("anchor lang: {0}")]
@@ -13,7 +13,7 @@ pub enum Error {
     #[error("base64 decode error: {0}")]
     Base64Decode(#[from] base64::DecodeError),
     #[error("invalid subdao: {0}")]
-    InvalidSubDao(solana_sdk::pubkey::Pubkey),
+    InvalidSubDao(Pubkey),
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("parse int error: {0}")]
@@ -30,12 +30,6 @@ pub enum Error {
     Axum(#[from] axum::BoxError),
     #[error("{0}")]
     Custom(&'static str),
-    #[error("SolanaProgramIdNotParsable: {0}")]
-    SolanaProgramIdNotParsable(String),
-    #[error("SolanaProgramError: {0}")]
-    SolanaProgram(#[from] solana_program::program_error::ProgramError),
-    #[error("UnexpectedProgramName")]
-    UnexpectedProgramName,
     #[error("serde json error: {0}")]
     SerdeJson(#[from] serde_json::Error),
     #[error("rpc error: {0}")]
@@ -44,6 +38,8 @@ pub enum Error {
     MissingPosition { position: Pubkey },
     #[error("No registrar for mint {0}")]
     NoRegistrarForMint(&'static str),
+    #[error("SolanaProgramError: {0}")]
+    SolanaProgram(#[from] anchor_lang::prelude::ProgramError),
 }
 
 impl From<anchor_lang::error::Error> for Error {

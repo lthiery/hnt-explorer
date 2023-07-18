@@ -15,7 +15,7 @@ pub enum Error {
     #[error("base64 decode error: {0}")]
     B64Decode(#[from] base64::DecodeError),
     #[error("solana parse pubkey error: {0}")]
-    SolanaParsePubkey(#[from] solana_sdk::pubkey::ParsePubkeyError),
+    SolanaParsePubkey(#[from] anchor_lang::solana_program::pubkey::ParsePubkeyError),
     #[error("join error: {0} ")]
     Join(#[from] tokio::task::JoinError),
     #[error("no asset by authority for {0}")]
@@ -24,6 +24,8 @@ pub enum Error {
     ParseInt(#[from] std::num::ParseIntError),
     #[error("Account not found.")]
     AccountNotFound,
+    #[error("try from slice error: {0}")]
+    TryFromSlice(#[from] std::array::TryFromSliceError),
 }
 
 impl Error {

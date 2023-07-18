@@ -1,6 +1,6 @@
+use anchor_lang::solana_program::pubkey::Pubkey;
 use base64::Engine;
 use serde::{de::DeserializeOwned, Deserialize, Serialize, Serializer};
-use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
@@ -166,7 +166,7 @@ impl Client {
     pub async fn get_owner_by_mint(&self, mint: &Pubkey) -> Result<Pubkey> {
         let token_largest_accounts = self.get_token_largest_account(mint).await?;
         let account_data = self.get_account_data(&token_largest_accounts).await?;
-        Ok(Pubkey::new(&account_data[32..64]))
+        Ok(Pubkey::try_from(&account_data[32..64])?)
     }
 
     pub async fn get_all_owners_by_mint(
@@ -195,8 +195,8 @@ impl Client {
                 .await?;
             let these_owners = account_data
                 .into_iter()
-                .map(|v| Pubkey::new(&v[32..64]))
-                .collect::<Vec<Pubkey>>();
+                .map(|v| Pubkey::try_from(&v[32..64]).map_err(Error::TryFromSlice))
+                .collect::<Result<Vec<Pubkey>>>()?;
             owners.extend(&these_owners);
             if last_output.elapsed().as_secs() > 5 || owners.len() == position_id.len() {
                 last_output = Instant::now();
