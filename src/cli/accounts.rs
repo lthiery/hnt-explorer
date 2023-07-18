@@ -61,8 +61,6 @@ impl HeliumBalances {
     }
 }
 
-use solana_account_decoder::parse_account_data::{ParsableAccount, PARSABLE_PROGRAM_IDS};
-use spl_token_2022::extension::StateWithExtensions;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -80,10 +78,7 @@ async fn get_account(
     pubkey: &Pubkey,
 ) -> Result<SplAccount> {
     let spl_atc = spl_associated_token_account::get_associated_token_address(pubkey, mint);
-    let program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap();
-
     let account = rpc_client.get_account(&spl_atc).await;
-
     if let Err(rpc::Error::AccountNotFound) = account {
         return Ok(SplAccount {
             mint: *mint,
@@ -93,20 +88,11 @@ async fn get_account(
     };
     let account = account?;
 
-    let program_name = PARSABLE_PROGRAM_IDS
-        .get(&program_id)
-        .ok_or(Error::SolanaProgramIdNotParsable(program_id.to_string()))?;
-
-    match program_name {
-        ParsableAccount::SplToken | ParsableAccount::SplToken2022 => {
-            let account_data =
-                StateWithExtensions::<spl_token_2022::state::Account>::unpack(&account.data)?;
-            Ok(SplAccount {
-                mint: *mint,
-                lamports: account.lamports,
-                token: account_data.base.amount,
-            })
-        }
-        _ => Err(Error::UnexpectedProgramName),
-    }
+    let mut data = account.data.as_slice();
+    let account_data = helium_anchor_gen::spl_token::SplAccount::try_deserialize(&mut data)?;
+    Ok(SplAccount {
+        mint: *mint,
+        lamports: account.lamports,
+        token: account_data.amount,
+    })
 }
