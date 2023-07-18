@@ -72,6 +72,8 @@ struct SplAccount {
     pub token: u64,
 }
 
+use spl_token_2022::extension::StateWithExtensions;
+
 async fn get_account(
     rpc_client: &Arc<rpc::Client>,
     mint: &Pubkey,
@@ -87,12 +89,11 @@ async fn get_account(
         });
     };
     let account = account?;
-
-    let mut data = account.data.as_slice();
-    let account_data = helium_anchor_gen::spl_token::SplAccount::try_deserialize(&mut data)?;
+    let account_data =
+        StateWithExtensions::<spl_token_2022::state::Account>::unpack(&account.data)?;
     Ok(SplAccount {
         mint: *mint,
         lamports: account.lamports,
-        token: account_data.amount,
+        token: account_data.base.amount,
     })
 }

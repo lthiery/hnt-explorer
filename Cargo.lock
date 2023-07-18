@@ -942,7 +942,7 @@ dependencies = [
 [[package]]
 name = "circuit-breaker"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -1265,7 +1265,7 @@ dependencies = [
 [[package]]
 name = "data-credits"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -1451,7 +1451,7 @@ dependencies = [
 [[package]]
 name = "fanout"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -1717,7 +1717,7 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 [[package]]
 name = "helium-anchor-gen"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -1731,7 +1731,6 @@ dependencies = [
  "mobile-entity-manager",
  "price-oracle",
  "rewards-oracle",
- "spl-token 0.1.0",
  "treasury-management",
  "voter-stake-registry",
 ]
@@ -1777,7 +1776,7 @@ dependencies = [
 [[package]]
 name = "helium-entity-manager"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -1786,7 +1785,7 @@ dependencies = [
 [[package]]
 name = "helium-sub-daos"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -1872,6 +1871,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "spl-associated-token-account",
+ "spl-token-2022",
  "thiserror",
  "tokio",
 ]
@@ -2110,7 +2110,7 @@ dependencies = [
 [[package]]
 name = "lazy-distributor"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -2119,7 +2119,7 @@ dependencies = [
 [[package]]
 name = "lazy-transactions"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -2288,7 +2288,7 @@ dependencies = [
 [[package]]
 name = "mobile-entity-manager"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -2526,7 +2526,7 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 [[package]]
 name = "price-oracle"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -2810,7 +2810,7 @@ dependencies = [
 [[package]]
 name = "rewards-oracle"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -3408,7 +3408,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "solana-program",
- "spl-token 3.5.0",
+ "spl-token",
  "spl-token-2022",
  "thiserror",
 ]
@@ -3420,15 +3420,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd0dc6f70db6bacea7ff25870b016a65ba1d1b6013536f08e4fd79a8f9005325"
 dependencies = [
  "solana-program",
-]
-
-[[package]]
-name = "spl-token"
-version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
-dependencies = [
- "anchor-gen",
- "anchor-lang",
 ]
 
 [[package]]
@@ -3460,7 +3451,7 @@ dependencies = [
  "solana-program",
  "solana-zk-token-sdk",
  "spl-memo",
- "spl-token 3.5.0",
+ "spl-token",
  "thiserror",
 ]
 
@@ -3715,7 +3706,7 @@ dependencies = [
 [[package]]
 name = "treasury-management"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",
@@ -3827,7 +3818,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "voter-stake-registry"
 version = "0.1.0"
-source = "git+https://github.com/lthiery/helium-anchor-gen.git#5e1bccb54dbfc40dd1c79f4c34f594a59d4e5ae1"
+source = "git+https://github.com/lthiery/helium-anchor-gen.git#f7fb496375c337e4a965faaf5cb5123adafb05df"
 dependencies = [
  "anchor-gen",
  "anchor-lang",

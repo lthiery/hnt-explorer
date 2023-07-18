@@ -38,6 +38,8 @@ pub enum Error {
     MissingPosition { position: Pubkey },
     #[error("No registrar for mint {0}")]
     NoRegistrarForMint(&'static str),
+    #[error("SolanaProgramError: {0}")]
+    SolanaProgram(#[from] anchor_lang::prelude::ProgramError),
 }
 
 impl From<anchor_lang::error::Error> for Error {
