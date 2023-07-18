@@ -59,7 +59,7 @@ pub async fn get_data(rpc_client: &rpc::Client) -> Result<Data> {
     let mut registrar_to_mint = HashMap::new();
     for (pubkey, registrar) in registrar_keys.iter().zip(registrars_raw.iter()) {
         let mint = &registrar.voting_mints[0];
-        mint_configs.insert(mint.mint, mint.clone());
+        mint_configs.insert(mint.mint, *mint);
         registrar_to_mint.insert(**pubkey, mint.mint);
     }
 

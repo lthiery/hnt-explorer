@@ -215,7 +215,7 @@ pub async fn get_positions_of_mint(
     for (pubkey, position) in positions_data.positions.iter() {
         if let Some(position_mint) = positions_data.registrar_to_mint.get(&position.registrar) {
             if position_mint.to_string().as_str() == mint {
-                positions_raw.insert(*pubkey, position.clone());
+                positions_raw.insert(*pubkey, *position);
                 let owner: Result<Pubkey> = match position_owners_map.get(pubkey) {
                     Some(owner) => Ok(*owner),
                     None => {
@@ -235,7 +235,7 @@ pub async fn get_positions_of_mint(
                         let position = Position::try_from_positionv0(
                             owner,
                             *pubkey,
-                            position.clone(),
+                            *position,
                             timestamp,
                             &voting_mint_config,
                         )
