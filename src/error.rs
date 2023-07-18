@@ -1,5 +1,5 @@
-use anchor_lang::solana_program::pubkey::Pubkey;
 use crate::rpc;
+use anchor_lang::solana_program::pubkey::Pubkey;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

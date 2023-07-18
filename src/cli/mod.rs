@@ -1,8 +1,8 @@
 use super::*;
 
 use anchor_lang::{
-   solana_program::pubkey::Pubkey,
-    prelude::{AccountDeserialize, Result as AnchorResult, }
+    prelude::{AccountDeserialize, Result as AnchorResult},
+    solana_program::pubkey::Pubkey,
 };
 
 pub mod accounts;
