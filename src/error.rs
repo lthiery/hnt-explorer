@@ -1,11 +1,11 @@
+use anchor_lang::solana_program::pubkey::Pubkey;
 use crate::rpc;
-use solana_sdk::pubkey::Pubkey;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("solana pubkey parse: {0}")]
-    SolanaPubkeyParse(#[from] solana_sdk::pubkey::ParsePubkeyError),
+    SolanaPubkeyParse(#[from] anchor_lang::solana_program::pubkey::ParsePubkeyError),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("anchor lang: {0}")]
@@ -13,7 +13,7 @@ pub enum Error {
     #[error("base64 decode error: {0}")]
     Base64Decode(#[from] base64::DecodeError),
     #[error("invalid subdao: {0}")]
-    InvalidSubDao(solana_sdk::pubkey::Pubkey),
+    InvalidSubDao(Pubkey),
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("parse int error: {0}")]

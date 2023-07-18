@@ -1871,7 +1871,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "solana-sdk",
  "spl-associated-token-account",
  "thiserror",
  "tokio",

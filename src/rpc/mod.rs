@@ -1,6 +1,6 @@
+use anchor_lang::solana_program::pubkey::Pubkey;
 use base64::Engine;
 use serde::{de::DeserializeOwned, Deserialize, Serialize, Serializer};
-use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 

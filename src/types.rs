@@ -1,5 +1,5 @@
 use super::Result;
-use solana_sdk::pubkey::Pubkey;
+use anchor_lang::solana_program::pubkey::Pubkey;
 
 pub const HELIUM_DAO_ID: &str = "hdaoVTCqhfHHo75XdAMxBKdUqvq1i5bF23sisBqVgGR";
 pub const HELIUM_VSR_ID: &str = "hvsrNC3NKbcryqDs2DocYHZ9yPKEVzdSjQG6RVtK1s8";

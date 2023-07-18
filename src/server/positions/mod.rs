@@ -10,7 +10,7 @@ use axum::{
     http::{header, HeaderValue},
     response::{IntoResponse, Response},
 };
-use solana_sdk::pubkey::Pubkey;
+use anchor_lang::solana_program::pubkey::Pubkey;
 use std::ops::DerefMut;
 use std::str::FromStr;
 use tokio::{fs::File, io::AsyncReadExt};
