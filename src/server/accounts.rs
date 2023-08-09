@@ -175,19 +175,38 @@ pub async fn get_account(
                     Ok(response::Json(json!({
                         "balances": balances,
                         "positions": list_of_positions,
-                    })))
+                    }))
+                    .into())
                 } else {
                     Ok(response::Json(json!({
                         "balances": balances,
-                    })))
+                    }))
+                    .into())
                 }
             }
         }
     } else {
-        Err((
-            StatusCode::BAD_REQUEST,
-            format!("\"{account}\" is not a valid base58 encoded Solana pubkey"),
-        ))
+        match  helium_crypto::public_key::PublicKey::from_str(&account) {
+            Ok(helium_pubkey) => {
+                match Pubkey::try_from(helium_pubkey) {
+                    Ok(solana_pubkey) => {
+                        Ok(response::Redirect::to(&format!("/v1/accounts/{}", solana_pubkey)).into())
+                    }
+                    Err(e) => {
+                        Err((
+                            StatusCode::BAD_REQUEST,
+                            format!("\"{account}\" is a valid Helium pubkey but cannot be converted to Solana: {e}"),
+                        ))
+                    }
+                }
+            }
+            Err(_) => {
+                Err((
+                    StatusCode::BAD_REQUEST,
+                    format!("\"{account}\" is not a valid base58 encoded Solana pubkey."),
+                ))
+            }
+        }
     }
 }
 
@@ -294,5 +313,6 @@ pub async fn get_top_dao_accounts(
 
     Ok(response::Json(json!({
         "top": owners_and_balances,
-    })))
+    }))
+    .into())
 }

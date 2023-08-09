@@ -83,5 +83,5 @@ pub async fn get(
         EpochSummary::from_partial_data(last_epoch, mobile_vehnt, iot_vehnt, ts).unwrap();
     data.push(current_stats);
 
-    Ok(response::Json(json!(data)))
+    Ok(response::Json(json!(data)).into())
 }

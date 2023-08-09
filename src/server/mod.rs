@@ -13,12 +13,38 @@ use serde_json::{json, Value};
 use tokio::time;
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
-pub type HandlerResult = std::result::Result<response::Json<Value>, (StatusCode, String)>;
+pub type HandlerResult = std::result::Result<MyResponse, (StatusCode, String)>;
+
+pub enum MyResponse {
+    Json(response::Json<Value>),
+    Redirect(response::Redirect),
+}
+
+impl response::IntoResponse for MyResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Json(j) => j.into_response(),
+            Self::Redirect(r) => r.into_response(),
+        }
+    }
+}
+
+impl From<response::Json<Value>> for MyResponse {
+    fn from(j: response::Json<Value>) -> Self {
+        Self::Json(j)
+    }
+}
+impl From<response::Redirect> for MyResponse {
+    fn from(r: response::Redirect) -> Self {
+        Self::Redirect(r)
+    }
+}
 
 mod accounts;
 mod epoch_info;
 mod positions;
 
+use axum::response::Response;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

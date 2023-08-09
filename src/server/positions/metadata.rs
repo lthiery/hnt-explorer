@@ -33,5 +33,5 @@ pub async fn vehnt_positions_metadata(
         }
     }?;
 
-    Ok(response::Json(json!(data.stats)))
+    Ok(response::Json(json!(data.stats)).into())
 }
