@@ -346,7 +346,7 @@ async fn positions(
         timestamp: data.timestamp,
     };
 
-    Ok(response::Json(json!(data)))
+    Ok(response::Json(json!(data)).into())
 }
 
 pub async fn vehnt_position(
@@ -390,7 +390,7 @@ pub async fn position(
             Dao::Mobile => &memory.vemobile_positions,
         };
         if let Some(position) = memory.get(&pubkey) {
-            Ok(response::Json(json!(position)))
+            Ok(response::Json(json!(position)).into())
         } else {
             Err((
                 StatusCode::NOT_FOUND,

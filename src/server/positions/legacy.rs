@@ -63,5 +63,5 @@ pub async fn delegated_stakes(
         timestamp: data.timestamp,
     };
 
-    Ok(response::Json(json!(data)))
+    Ok(response::Json(json!(data)).into())
 }
