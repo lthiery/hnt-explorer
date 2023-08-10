@@ -25,6 +25,8 @@ Provides balances of HNT, MOBILE, and IOT. This endpoint is aware of positions a
 "locked" and "pending" amounts for balances. This endpoint is not aware of pending hotspot rewards (nor does it list
 hotspot NFTs).
 
+Legacy Helium pubkeys of type ed25519 will redirect to the Solana address.
+
 GET [`/v1/accounts/vehnt/{dao}/top`](https://hnt-explorer.herokuapp.com/v1/accounts/vehnt/top)
 Provides a list of the top 100 accounts in DAO voting weight. Possible DAO values are `vehnt`, `veiot` and `vemobile`.
 

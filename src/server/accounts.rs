@@ -203,7 +203,7 @@ pub async fn get_account(
             Err(_) => {
                 Err((
                     StatusCode::BAD_REQUEST,
-                    format!("\"{account}\" is not a valid base58 encoded Solana (or Helium) pubkey."),
+                    format!("\"{account}\" is neither a valid base58 encoded Solana or Helium pubkey."),
                 ))
             }
         }
