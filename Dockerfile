@@ -1,9 +1,15 @@
 ####################################################################################################
 ## Builder
 ####################################################################################################
-FROM rust:latest AS builder
+FROM debian:buster-slim AS builder
 
-RUN update-ca-certificates
+RUN apt-get update
+RUN apt-get upgrade
+RUN apt-get install -y curl build-essential
+
+# Get Rust
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Create appuser
 ENV USER=hnt-explorer
