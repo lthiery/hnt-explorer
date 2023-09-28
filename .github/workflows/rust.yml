@@ -40,4 +40,4 @@ jobs:
         env:
           SOL_RPC_ENDPOINT: ${{ secrets.SOL_RPC_ENDPOINT }}
         with:
-          command: test
+          command: test -- --test-threads=1
