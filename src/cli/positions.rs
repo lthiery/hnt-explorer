@@ -398,7 +398,7 @@ pub async fn get_data(
                 delegated_position.position
             ),
             (None, None) => println!(
-                "Warning: could not find position or position_v0 for delegated position {}",
+                "Warning: could find neither position nor position_v0 for delegated position {}",
                 delegated_position.position
             ),
         }

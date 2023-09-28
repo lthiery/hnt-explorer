@@ -45,7 +45,7 @@ impl Client {
     pub(crate) async fn post<T: DeserializeOwned, D: Serialize>(&self, data: &D) -> Result<T> {
         let mut result = self.post_attempt(data).await;
         let mut retries = 0;
-        while let Err(Error::NodeError { .. }) = result {
+        while result.is_err() {
             retries += 1;
             if retries > self.max_retries {
                 return result;

@@ -176,6 +176,7 @@ impl Client {
     ) -> Result<Vec<Pubkey>> {
         use futures::future::join_all;
         use std::time::Instant;
+        const ONE_SEC: Duration = Duration::from_secs(1);
         let mut owners = Vec::with_capacity(position_id.len());
 
         println!("Fetching owners of {} positions", position_id.len());
@@ -188,15 +189,15 @@ impl Client {
         for i in position_id.chunks(chunk_size) {
             let mut futures = Vec::with_capacity(chunk_size);
 
-            if num_requests > 150 && reference.elapsed() < Duration::from_secs(1) {
+            if num_requests > 150 && reference.elapsed() < ONE_SEC {
                 tokio::time::sleep(Duration::from_secs(1) - reference.elapsed()).await;
             }
 
-            if reference.elapsed() >= Duration::from_secs(1) {
+            if reference.elapsed() >= ONE_SEC {
                 reference = Instant::now();
                 num_requests = 0;
             }
-            let time_left = Duration::from_secs(1) - reference.elapsed();
+            let time_left = ONE_SEC - reference.elapsed();
 
             for j in i {
                 futures.push(async move {
@@ -207,7 +208,11 @@ impl Client {
                             break;
                         }
                         retries += 1;
-                        tokio::time::sleep(time_left).await;
+                        if retries == 1 {
+                            tokio::time::sleep(time_left).await;
+                        } else {
+                            tokio::time::sleep(ONE_SEC).await;
+                        }
                         result = self.get_token_largest_account(j).await;
                     }
                     result
