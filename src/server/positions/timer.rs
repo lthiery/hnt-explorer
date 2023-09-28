@@ -12,7 +12,9 @@ pub async fn get_positions(
             Memory::pull_latest_data(&rpc_client, epoch_memory.clone(), &mut position_owner_map)
                 .await;
         // if the first pull fails, keep trying until it succeeds
+        let mut attempts = 0;
         while let Err(e) = latest_data {
+            attempts += 1;
             println!("Error pulling data: {e:?}");
             latest_data = Memory::pull_latest_data(
                 &rpc_client,
@@ -20,6 +22,10 @@ pub async fn get_positions(
                 &mut position_owner_map,
             )
             .await;
+            // if we fail 3 times in a row, back off for 5 minutes
+            if attempts > 3 {
+                tokio::time::sleep(tokio::time::Duration::from_secs(60 * 5)).await;
+            }
         }
         //safe to unwrap because of result check above
         let latest_data = latest_data.unwrap();

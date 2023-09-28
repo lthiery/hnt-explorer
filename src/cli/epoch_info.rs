@@ -197,9 +197,12 @@ impl TryFrom<SubDaoEpochInfoV0> for SubDaoEpochInfo {
                 None
             },
             rewards_issued_at_ts: value.rewards_issued_at,
-            rewards_issued_at: value
-                .rewards_issued_at
-                .map(|t| DateTime::from_utc(NaiveDateTime::from_timestamp_opt(t, 0).unwrap(), Utc)),
+            rewards_issued_at: value.rewards_issued_at.map(|t| {
+                DateTime::from_naive_utc_and_offset(
+                    NaiveDateTime::from_timestamp_opt(t, 0).unwrap(),
+                    Utc,
+                )
+            }),
             bump_seed: value.bump_seed,
             initialized: value.initialized,
         })

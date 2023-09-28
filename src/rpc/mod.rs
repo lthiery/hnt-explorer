@@ -181,11 +181,40 @@ impl Client {
         println!("Fetching owners of {} positions", position_id.len());
         let start = Instant::now();
         let mut last_output = start;
+
+        let mut reference = Instant::now();
+        let mut num_requests = 0;
+
         for i in position_id.chunks(chunk_size) {
             let mut futures = Vec::with_capacity(chunk_size);
-            for j in i {
-                futures.push(self.get_token_largest_account(j));
+
+            if num_requests > 150 && reference.elapsed() < Duration::from_secs(1) {
+                tokio::time::sleep(Duration::from_secs(1) - reference.elapsed()).await;
             }
+
+            if reference.elapsed() >= Duration::from_secs(1) {
+                reference = Instant::now();
+                num_requests = 0;
+            }
+            let time_left = Duration::from_secs(1) - reference.elapsed();
+
+            for j in i {
+                futures.push(async move {
+                    let mut retries = 0;
+                    let mut result = self.get_token_largest_account(j).await;
+                    while result.is_err() {
+                        if retries > 3 {
+                            break;
+                        }
+                        retries += 1;
+                        tokio::time::sleep(time_left).await;
+                        result = self.get_token_largest_account(j).await;
+                    }
+                    result
+                });
+            }
+            num_requests += chunk_size;
+
             let token_accounts: Vec<Result<Pubkey>> = join_all(futures).await;
             let token_accounts: Vec<Pubkey> = token_accounts
                 .into_iter()

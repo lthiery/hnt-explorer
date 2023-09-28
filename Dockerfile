@@ -4,7 +4,7 @@
 FROM debian:buster-slim AS builder
 
 RUN apt-get update
-RUN apt-get upgrade
+RUN apt-get upgrade -y
 RUN apt-get install -y curl build-essential
 
 # Get Rust
