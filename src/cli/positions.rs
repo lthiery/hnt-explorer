@@ -374,7 +374,6 @@ pub async fn get_data(
     };
 
     for (pubkey, delegated_position) in delegated_positions {
-        let delegated_position = delegated_position;
         let position_v0 = vehnt_positions_raw.get(&delegated_position.position);
         let position = vehnt_positions.get_mut(&delegated_position.position);
         match (position_v0, position) {
