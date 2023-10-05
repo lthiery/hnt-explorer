@@ -345,7 +345,7 @@ mod test {
             )
             .await
             .unwrap();
-        let pubkey = Pubkey::new(&data[32..64]);
+        let pubkey = Pubkey::try_from(&data[32..64]).unwrap();
         assert_eq!(
             pubkey,
             Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
@@ -362,12 +362,12 @@ mod test {
             ])
             .await
             .unwrap();
-        let pubkey = Pubkey::new(&data[0][32..64]);
+        let pubkey = Pubkey::try_from(&data[0][32..64]).unwrap();
         assert_eq!(
             pubkey,
             Pubkey::from_str("ADqp77vvKapHsU2ymsaoMojXpHjdhxLcfrgWWtaxYCVU").unwrap()
         );
-        let pubkey = Pubkey::new(&data[1][32..64]);
+        let pubkey = Pubkey::try_from(&data[1][32..64]).unwrap();
         assert_eq!(
             pubkey,
             Pubkey::from_str("CCUWF8sALfvVtv1EvKwuM4p7ZgUWvsrKVzQfFGmBz6pa").unwrap()
