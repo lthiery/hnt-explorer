@@ -36,8 +36,6 @@ jobs:
           args: --all-features -- -Dclippy::all
 
       - name: Test
-        uses: actions-rs/cargo@v1
         env:
           SOL_RPC_ENDPOINT: ${{ secrets.SOL_RPC_ENDPOINT }}
-        with:
-          command: test -- --test-threads=1
+        run: cargo test -- --test-threads=1
