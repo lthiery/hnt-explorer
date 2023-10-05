@@ -6,7 +6,7 @@ use std::str::FromStr;
 use crate::cli::accounts::{self, HeliumBalances};
 use crate::server::positions::{Dao, LockedBalances};
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct Balances {
     vehnt: VehntBalance,
     hnt: HntBalance,
@@ -14,6 +14,20 @@ pub struct Balances {
     mobile: DntBalance,
     veiot: u128,
     vemobile: u128,
+}
+
+impl Add for Balances {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self {
+            vehnt: self.vehnt + other.vehnt,
+            hnt: self.hnt + other.hnt,
+            iot: self.iot + other.iot,
+            mobile: self.mobile + other.mobile,
+            veiot: self.veiot + other.veiot,
+            vemobile: self.vemobile + other.vemobile,
+        }
+    }
 }
 
 impl Balances {
@@ -32,12 +46,24 @@ impl Balances {
             .absorb_locked_amount(locked_balances.locked_mobile);
     }
 }
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Deserialize, Default, Copy, Clone, Debug, PartialEq)]
 pub struct DntBalance {
     amount: u64,
     locked_amount: u64,
     pending_amount: u64,
     total_amount: u64,
+}
+
+impl Add for DntBalance {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self {
+            amount: self.amount + other.amount,
+            locked_amount: self.locked_amount + other.locked_amount,
+            pending_amount: self.pending_amount + other.pending_amount,
+            total_amount: self.total_amount + other.total_amount,
+        }
+    }
 }
 
 impl DntBalance {
@@ -52,19 +78,42 @@ impl DntBalance {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Deserialize, Default, Copy, Clone, Debug, PartialEq)]
 pub struct HntBalance {
     amount: u64,
     locked_amount: u64,
     total_amount: u64,
 }
 
-#[derive(serde::Serialize, Default, Copy, Clone, Debug)]
+impl Add for HntBalance {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self {
+            amount: self.amount + other.amount,
+            locked_amount: self.locked_amount + other.locked_amount,
+            total_amount: self.total_amount + other.total_amount,
+        }
+    }
+}
+
+#[derive(serde::Serialize, Deserialize, Default, Copy, Clone, Debug, PartialEq)]
 pub struct VehntBalance {
     pub total: u128,
     pub iot_delegated: u128,
     pub mobile_delegated: u128,
     pub undelegated: u128,
+}
+
+impl Add for VehntBalance {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self {
+            total: self.total + other.total,
+            iot_delegated: self.iot_delegated + other.iot_delegated,
+            mobile_delegated: self.mobile_delegated + other.mobile_delegated,
+            undelegated: self.undelegated + other.undelegated,
+        }
+    }
 }
 
 impl From<HeliumBalances> for Balances {
@@ -99,6 +148,19 @@ impl From<accounts::Balance> for HntBalance {
             total_amount: b.amount,
         }
     }
+}
+
+#[derive(Deserialize, Default)]
+pub struct FullPositions {
+    pub vehnt: Vec<positions::Position>,
+    pub vemobile: Vec<positions::Position>,
+    pub veiot: Vec<positions::Position>,
+}
+#[derive(Deserialize, Default)]
+pub struct Account {
+    #[serde(default = "FullPositions::default")]
+    pub positions: FullPositions,
+    pub balances: Balances,
 }
 
 pub async fn get_account(
@@ -220,8 +282,8 @@ struct TopResult {
     pub locked_balances: LockedBalances,
 }
 
-#[derive(serde::Serialize)]
-struct Positions {
+#[derive(serde::Serialize, Deserialize)]
+pub struct Positions {
     vehnt: Vec<String>,
     veiot: Vec<String>,
     vemobile: Vec<String>,
