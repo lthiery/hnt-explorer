@@ -651,7 +651,7 @@ pub struct Position {
     pub end_ts: i64,
     pub duration_s: i64,
     pub voting_weight: u128,
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing, skip_deserializing)]
     pub vehnt_info: VehntInfo,
     pub lockup_type: LockupType,
     #[serde(skip_serializing_if = "Option::is_none")]

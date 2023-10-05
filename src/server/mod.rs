@@ -1,5 +1,5 @@
 use super::{error::Error, rpc};
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Add};
 
 use axum::{
     extract::{Extension, Query},
@@ -40,7 +40,7 @@ impl From<response::Redirect> for MyResponse {
     }
 }
 
-mod accounts;
+pub mod accounts;
 mod epoch_info;
 mod positions;
 
