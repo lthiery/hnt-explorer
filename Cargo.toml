@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anchor-lang = "*"
 axum = { version = "0", features = ["query"] }
-base64 = "0"
+base64 = ">=0.20"
 bs58 = "0"
 chrono = "0"
 csv = "*"
