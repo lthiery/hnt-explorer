@@ -8,12 +8,12 @@ use crate::server::positions::{Dao, LockedBalances};
 
 #[derive(serde::Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct Balances {
-    vehnt: VehntBalance,
-    hnt: HntBalance,
-    iot: DntBalance,
-    mobile: DntBalance,
-    veiot: u128,
-    vemobile: u128,
+    pub vehnt: VehntBalance,
+    pub hnt: HntBalance,
+    pub iot: DntBalance,
+    pub mobile: DntBalance,
+    pub veiot: u128,
+    pub vemobile: u128,
 }
 
 impl Add for Balances {
@@ -48,10 +48,10 @@ impl Balances {
 }
 #[derive(serde::Serialize, Deserialize, Default, Copy, Clone, Debug, PartialEq)]
 pub struct DntBalance {
-    amount: u64,
-    locked_amount: u64,
-    pending_amount: u64,
-    total_amount: u64,
+    pub amount: u64,
+    pub locked_amount: u64,
+    pub pending_amount: u64,
+    pub total_amount: u64,
 }
 
 impl Add for DntBalance {
@@ -80,9 +80,9 @@ impl DntBalance {
 
 #[derive(serde::Serialize, Deserialize, Default, Copy, Clone, Debug, PartialEq)]
 pub struct HntBalance {
-    amount: u64,
-    locked_amount: u64,
-    total_amount: u64,
+    pub amount: u64,
+    pub locked_amount: u64,
+    pub total_amount: u64,
 }
 
 impl Add for HntBalance {
