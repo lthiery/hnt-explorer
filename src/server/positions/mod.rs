@@ -1,8 +1,6 @@
 use super::positions;
 use super::{accounts::VehntBalance, *};
-pub use crate::cli::positions::{
-    AllPositionsData, LockupType, Position, PositionOwners, Positions,
-};
+pub use crate::cli::positions::{AllPositionsData, LockupType, Position, PositionOwners};
 use crate::types::SubDao;
 use anchor_lang::solana_program::pubkey::Pubkey;
 use axum::{

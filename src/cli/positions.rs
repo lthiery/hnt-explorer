@@ -278,7 +278,11 @@ pub async fn get_data(
     if position_owners_map.is_empty() {
         println!("Initializing position owners map");
         let client = rpc::Client::default();
-        let position_keys = positions_data.positions.iter().map(|p| &p.1.mint).collect();
+        let position_keys = positions_data
+            .positions
+            .iter()
+            .map(|p| &p.1.mint)
+            .collect::<Vec<&Pubkey>>();
         let owners = client.get_all_owners_by_mint(&position_keys, 100).await?;
         positions_data
             .positions

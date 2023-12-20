@@ -171,7 +171,7 @@ impl Client {
 
     pub async fn get_all_owners_by_mint(
         &self,
-        position_id: &Vec<&Pubkey>,
+        position_id: &[&Pubkey],
         chunk_size: usize,
     ) -> Result<Vec<Pubkey>> {
         use futures::future::join_all;
