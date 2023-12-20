@@ -6,7 +6,7 @@ use std::str::FromStr;
 use crate::cli::accounts::{self, HeliumBalances};
 use crate::server::positions::{Dao, LockedBalances};
 
-#[derive(serde::Serialize, Deserialize, Default, PartialEq, Debug)]
+#[derive(serde::Serialize, Deserialize, Default, PartialEq, Debug, Copy, Clone)]
 pub struct Balances {
     pub vehnt: VehntBalance,
     pub hnt: HntBalance,
