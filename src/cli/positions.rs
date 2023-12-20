@@ -48,10 +48,7 @@ async fn get_accounts_with_prefix(
     let helium_dao_id = Pubkey::from_str(HELIUM_DAO_ID)?;
     let memcmp = rpc::GetProgramAccountsFilter::Memcmp(rpc::Memcmp::new(0, input));
     let accounts = rpc_client
-        .get_program_accounts_with_filter(
-            &helium_dao_id,
-            vec![rpc::GetProgramAccountsFilter::DataSize(196), memcmp],
-        )
+        .get_program_accounts_with_filter(&helium_dao_id, vec![memcmp])
         .await?;
     Ok(accounts)
 }
