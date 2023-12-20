@@ -23,10 +23,7 @@ pub async fn get_data(rpc_client: &rpc::Client) -> Result<Data> {
     let memcmp =
         rpc::GetProgramAccountsFilter::Memcmp(rpc::Memcmp::new(0, &POSITION_V0_DESCRIMINATAOR));
     let accounts = rpc_client
-        .get_program_accounts_with_filter(
-            &helium_vsr_id,
-            vec![rpc::GetProgramAccountsFilter::DataSize(180), memcmp],
-        )
+        .get_program_accounts_with_filter(&helium_vsr_id, vec![memcmp])
         .await?;
     let positions = accounts
         .iter()
