@@ -1,4 +1,5 @@
 use super::*;
+use axum::body::{Body, Bytes};
 
 pub async fn server_latest_delegated_positions_as_csv(
     Extension(memory): Extension<Arc<Mutex<Option<Memory>>>>,
@@ -17,14 +18,14 @@ pub async fn server_latest_delegated_positions_as_csv(
     match File::open(&latest_file).await {
         Err(_) => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
-            .body(body::boxed(Empty::new()))
+            .body(Body::empty())
             .unwrap()),
         Ok(mut file) => {
             let mut contents = vec![];
             match file.read_to_end(&mut contents).await {
                 Err(_) => Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
-                    .body(body::boxed(Empty::new()))
+                    .body(Body::empty())
                     .unwrap()),
                 Ok(_) => {
                     drop(memory_mutex);
@@ -41,7 +42,7 @@ pub async fn server_latest_delegated_positions_as_csv(
                             ))
                             .unwrap(),
                         )
-                        .body(body::boxed(Full::from(contents)))
+                        .body(Body::from(Bytes::from(contents)))
                         .unwrap())
                 }
             }
@@ -66,14 +67,14 @@ pub async fn server_latest_positions_as_csv(
     match File::open(&latest_file).await {
         Err(_) => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
-            .body(body::boxed(Empty::new()))
+            .body(Body::empty())
             .unwrap()),
         Ok(mut file) => {
             let mut contents = vec![];
             match file.read_to_end(&mut contents).await {
                 Err(_) => Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
-                    .body(body::boxed(Empty::new()))
+                    .body(Body::empty())
                     .unwrap()),
                 Ok(_) => {
                     drop(memory_mutex);
@@ -90,7 +91,7 @@ pub async fn server_latest_positions_as_csv(
                             ))
                             .unwrap(),
                         )
-                        .body(body::boxed(Full::from(contents)))
+                        .body(Body::from(Bytes::from(contents)))
                         .unwrap())
                 }
             }

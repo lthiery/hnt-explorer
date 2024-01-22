@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 anchor-lang = "*"
-axum = { version = "0.6", features = ["query"] }
+axum = { version = "0.7", features = ["query"] }
+axum-server = { version = "0" }
 base64 = ">=0.20"
 bs58 = "0"
 chrono = "0"

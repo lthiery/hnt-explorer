@@ -133,7 +133,7 @@ impl Server {
             result = positions::get_positions(rpc_client.clone(), positions_memory,
                 epoch_info_memory.clone()) => result,
             result = epoch_info::get_epoch_info(rpc_client, epoch_info_memory) => result,
-            result = axum::Server::bind(&addr)
+            result = axum_server::bind(addr)
                 .serve(app.into_make_service()) =>
                     result.map_err(|e| Error::Axum(e.into())),
         )
