@@ -12,8 +12,8 @@ pub fn format_dnt(dnt: u64) -> String {
         .join(",")
 }
 
-pub fn format_hnt(vehnt: u64) -> String {
-    let vehnt = vehnt / TOKEN_DIVIDER as u64;
+pub fn format_hnt(hnt: u64) -> String {
+    let vehnt = hnt / TOKEN_DIVIDER as u64;
     vehnt
         .to_string()
         .as_bytes()
