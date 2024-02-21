@@ -1,5 +1,4 @@
 use super::*;
-use serde::Serializer;
 
 /// JSON RPC version
 pub const JSON_RPC: &str = "2.0";
