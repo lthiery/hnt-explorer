@@ -726,7 +726,7 @@ impl DelegatedPosition {
             let epoch_summary = &epochs[i - FIRST_EPOCH];
             assert_eq!(epoch_summary.epoch, i as u64);
             let ts = epoch_summary.epoch_start_at_ts.unwrap();
-            let delegated_vehnt_at_epoch = position.voting_power(voting_mint_config, ts)? as u128;
+            let delegated_vehnt_at_epoch = position.voting_power(voting_mint_config, ts)?;
 
             let (delegation_rewards_issued, vehnt_at_epoch_start) = match sub_dao {
                 SubDao::Mobile => (epoch_summary.mobile_delegation_rewards_issued as u128, {
