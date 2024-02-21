@@ -1,5 +1,4 @@
 use super::*;
-use anchor_lang::AccountDeserialize;
 
 #[derive(Debug, Clone, clap::Args)]
 /// Scrape all SubDao epoch info

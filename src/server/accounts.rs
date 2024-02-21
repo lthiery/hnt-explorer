@@ -1,4 +1,4 @@
-use super::{positions, *};
+use super::*;
 use anchor_lang::solana_program::pubkey::Pubkey;
 use axum::extract::Path;
 use std::str::FromStr;
@@ -299,7 +299,7 @@ impl From<&positions::account::Positions> for Positions {
     }
 }
 
-use std::cmp::{Ord, Ordering};
+use std::cmp::Ordering;
 impl Ord for TopResult {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.dao {

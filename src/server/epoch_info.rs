@@ -1,7 +1,4 @@
-use super::super::{
-    cli::epoch_info::{self, EpochSummary},
-    rpc,
-};
+use super::super::cli::epoch_info::{self, EpochSummary};
 use super::*;
 use chrono::{Datelike, Utc};
 

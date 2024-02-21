@@ -1,4 +1,3 @@
-use super::positions;
 use super::{accounts::VehntBalance, *};
 pub use crate::cli::positions::{AllPositionsData, LockupType, Position, PositionOwners};
 use crate::types::SubDao;
